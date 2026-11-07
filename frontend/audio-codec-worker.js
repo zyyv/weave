@@ -7,8 +7,8 @@ async function process({id,buffer}){
   const signature=new TextDecoder().decode(buffer.slice(0,12));let pcm,rate,codec;
   if(signature.includes('#!SILK')){const result=await decode(buffer,24000);pcm=new Int16Array(result.data.buffer,result.data.byteOffset,result.data.byteLength/2);rate=24000;codec='SILK'}
   else if(signature.startsWith('#!AMR\n')){const samples=await decodeAMR(buffer);pcm=new Int16Array(samples.length);for(let i=0;i<samples.length;i++)pcm[i]=Math.max(-32768,Math.min(32767,samples[i]*32768));rate=8000;codec='AMR-NB'}
-  else throw Error('无法识别此语音的实际编码');
-  if(!pcm.length||pcm.length>rate*900)throw Error('语音格式无效或时长超过 15 分钟');
+  else throw Error('errors.voiceCodec');
+  if(!pcm.length||pcm.length>rate*900)throw Error('errors.voiceDuration');
   const count=Math.min(2048,pcm.length),peaks=new Float32Array(count*2),stride=Math.ceil(pcm.length/count);
   for(let i=0;i<count;i++){let peak=0;for(let j=i*stride;j<Math.min((i+1)*stride,pcm.length);j++)peak=Math.max(peak,Math.abs(pcm[j])/32768);peaks[i*2]=peak;peaks[i*2+1]=-peak}
   const wav=new ArrayBuffer(44+pcm.byteLength),view=new DataView(wav);const text=(offset,value)=>[...value].forEach((c,i)=>view.setUint8(offset+i,c.charCodeAt(0)));

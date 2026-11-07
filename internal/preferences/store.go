@@ -9,6 +9,7 @@ import (
 )
 
 type Preferences struct {
+	Locale           string  `json:"locale"`
 	SidebarCollapsed bool    `json:"sidebarCollapsed"`
 	Theme            string  `json:"theme"`
 	Palette          string  `json:"palette"`
@@ -41,7 +42,7 @@ type Snapshot struct {
 }
 
 func New(dir string) (*Store, error) {
-	s := &Store{path: filepath.Join(dir, "settings.json"), data: disk{Preferences: Preferences{Theme: "dark", Palette: "classic", Grouped: true, TypeColors: true, Density: "comfortable", View: "grid", Sort: "date", Volume: .8, Speed: 1}, Bindings: map[string]map[string]Contact{}}}
+	s := &Store{path: filepath.Join(dir, "settings.json"), data: disk{Preferences: Preferences{Locale: "zh-CN", Theme: "dark", Palette: "classic", Grouped: true, TypeColors: true, Density: "comfortable", View: "grid", Sort: "date", Volume: .8, Speed: 1}, Bindings: map[string]map[string]Contact{}}}
 	b, e := os.ReadFile(s.path)
 	if e == nil {
 		e = json.Unmarshal(b, &s.data)
@@ -88,7 +89,10 @@ func (s *Store) Set(p Preferences) error {
 		}
 		return false
 	}
-	if !valid(p.Theme, "dark", "light", "system") || !valid(p.Palette, "classic", "ocean", "forest") || !valid(p.Density, "comfortable", "compact") || !valid(p.View, "grid", "list") || !valid(p.Sort, "date", "size", "name") || p.Volume < 0 || p.Volume > 1 || p.Speed < .5 || p.Speed > 2 {
+	if p.Locale == "" {
+		p.Locale = "zh-CN"
+	}
+	if !valid(p.Locale, "zh-CN", "en") || !valid(p.Theme, "dark", "light", "system") || !valid(p.Palette, "classic", "ocean", "forest") || !valid(p.Density, "comfortable", "compact") || !valid(p.View, "grid", "list") || !valid(p.Sort, "date", "size", "name") || p.Volume < 0 || p.Volume > 1 || p.Speed < .5 || p.Speed > 2 {
 		return fmt.Errorf("无效的设置")
 	}
 	d := s.data

@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 // Native form state + one shared listbox. Long labels wrap; only visible options mount.
 const controls=new Map();
 let active=null,panel,viewport,spacer,query,filtered=[],rows=[],highlight=0,installed=false,totalHeight=0;
@@ -6,9 +7,9 @@ export function syncSelects(){
  for(const [select,button] of controls){
   if(!select.isConnected){button.remove();controls.delete(select);continue}
   button.hidden=select.hidden;button.disabled=select.disabled;
-  const label=select.selectedOptions[0]?.textContent||'请选择';
+  const label=select.selectedOptions[0]?.textContent||t('pleaseSelect');
   if(button.querySelector('span').textContent!==label)button.querySelector('span').textContent=label;button.title=label;
-  button.setAttribute('aria-label',select.getAttribute('aria-label')||document.querySelector(`label[for="${select.id}"]`)?.textContent||'选择');
+  button.setAttribute('aria-label',select.getAttribute('aria-label')||document.querySelector(`label[for="${select.id}"]`)?.textContent||t('selectLabel'));
  }
  if(active&&(!active.isConnected||active.hidden||active.disabled))close();
 }
@@ -19,7 +20,7 @@ function draw(){
  let lo=0,hi=rows.length;
  while(lo<hi){const m=(lo+hi)>>1;if(rows[m].top+rows[m].height<viewport.scrollTop-80)lo=m+1;else hi=m}
  spacer.replaceChildren();spacer.style.height=Math.max(36,totalHeight)+'px';
- if(!filtered.length){const empty=document.createElement('div');empty.className='select-empty';empty.textContent='没有匹配选项';spacer.append(empty)}
+ if(!filtered.length){const empty=document.createElement('div');empty.className='select-empty';empty.textContent=t('noMatchingOptions');spacer.append(empty)}
  let renderedHighlight=false;
  for(let i=lo;i<rows.length&&rows[i].top<viewport.scrollTop+viewport.clientHeight+80;i++){
   const {option,top,height}=rows[i],node=document.createElement('div');node.id='select-option-'+i;node.role='option';node.className='select-option'+(i===highlight?' highlighted':'');
@@ -34,9 +35,9 @@ function layout(){
  if(!active)return;
  const r=controls.get(active).getBoundingClientRect();measure.font='13px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
  const longest=Math.max(0,...filtered.map(o=>measure.measureText(o.textContent).width));
- const width=Math.min(Math.max(260,r.width,longest+60),620,innerWidth-16);
+ const width=Math.min(Math.max(query.hidden?0:220,r.width,longest+64),620,innerWidth-16);
  panel.style.width=width+'px';panel.style.left=Math.max(8,Math.min(r.left,innerWidth-width-8))+'px';
- let top=0;const available=width-52;
+ let top=0;const available=width-64;
  rows=filtered.map(option=>{let lines=1,lineWidth=0;for(const char of option.textContent){const w=measure.measureText(char).width;if(char==='\n'||lineWidth+w>available){lines++;lineWidth=char==='\n'?0:w}else lineWidth+=w}const height=Math.max(38,lines*20+16),row={option,top,height};top+=height;return row});totalHeight=top;
  const below=innerHeight-r.bottom-12,above=r.top-12,space=Math.max(below,above),searchHeight=query.hidden?0:44;
  const cap=Math.min(320,Math.max(38,space-searchHeight-14));const fitted=rows.filter(row=>row.top+row.height<=cap).at(-1);const listHeight=totalHeight<=cap?Math.max(38,totalHeight):fitted?fitted.top+fitted.height:cap;
@@ -65,7 +66,7 @@ function onKey(e){
 }
 export function installSelects(){
  if(installed)return;installed=true;panel=document.createElement('div');panel.className='select-popup';panel.popover='manual';
- panel.innerHTML='<input class="select-search" role="combobox" aria-label="搜索选项" aria-expanded="true" aria-controls="custom-options" placeholder="搜索会话…"><div class="select-viewport" id="custom-options" role="listbox" tabindex="0"><div class="select-spacer"></div></div>';
+ panel.innerHTML=`<input class="select-search" data-i18n-aria-label="searchOptions" data-i18n-placeholder="searchConversations" role="combobox" aria-label="${t('searchOptions')}" aria-expanded="true" aria-controls="custom-options" placeholder="${t('searchConversations')}"><div class="select-viewport" id="custom-options" role="listbox" tabindex="0"><div class="select-spacer"></div></div>`;
  document.body.append(panel);query=panel.querySelector('input');viewport=panel.querySelector('.select-viewport');spacer=panel.querySelector('.select-spacer');query.oninput=filter;viewport.onscroll=draw;panel.onkeydown=onKey;
  const scan=()=>{
   document.querySelectorAll('select:not([data-custom])').forEach(select=>{

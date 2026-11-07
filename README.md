@@ -5,10 +5,24 @@
 ## 开始使用
 
 1. 推荐解压 `build/Weave-macOS-arm64.zip`，将 Weave.app 拖入「应用程序」后打开。Documents 同步目录可能重新附加 Finder 元数据并干扰包签名，因此 ZIP 内的应用是验证过的分发版本。
-2. 自动扫描此前指定的微信 MessageTemp 目录。点击左上角「微信资源库」可更换目录。
+2. 自动扫描此前指定的微信 MessageTemp 目录。在「设置 → 数据与存储」中可查看和更换目录。
 3. 默认按会话目录展示资源，点击卡片进入会话。顶部按钮可切换「全部平铺」，选择会自动保存。
 4. 点击资源打开详情；勾选资源后点击「导出所选」，通过系统弹窗选择目标目录。每批最多 200 个。
 5. 在「设置 → 会话绑定」中给目录关联你确认的联系人或群聊名称。
+
+## 多语言
+
+在「设置 → 通用 → 语言 / Language」切换简体中文与 English，立即生效并自动保存。日期、播放器控件和系统目录弹窗随语言切换；文件名、标签和联系人名称保留原文。语言文件打包在应用内，运行时不需要外网。
+
+开发时需要 Node.js 22+。翻译由 [antfu 的 x18n](https://github.com/x18n-dev/x18n) 管理，界面使用本地 `t()` 翻译模块：
+
+```sh
+npm ci
+npm run i18n:check   # 严格检查缺失、未使用词条及占位符
+npm run i18n:ui      # 打开翻译管理界面
+```
+
+词条位于 `frontend/locales/zh-CN.json` 与 `frontend/locales/en.json`；配置位于 `x18n.config.json`。新增语言时，同步更新配置、前端支持列表和语言选项，以及 Go 设置的语言校验。
 
 ## 此次更新
 
@@ -56,6 +70,8 @@ npm run check
 `build.sh` 在临时目录完成签名，生成 `build/Weave-macOS-arm64.zip` 并解压验证。`build/Weave.app` 为便捷副本，其元数据可能受 Documents 同步服务影响。`go run . --serve --data /tmp/weave-state` 启动同一后台的浏览器预览，终端输出本次访问地址；原生目录选择和导出弹窗仅在桌面模式提供。`--root` 指定资源目录，`--data` 指定状态目录。开发预览可额外传 `--frontend /绝对路径/frontend`，从磁盘读取界面文件，正式应用使用内嵌文件。
 
 快捷键：⌘ K 搜索，⌘ \ 收合侧栏，⌘ , 设置。
+
+品牌图形采用选定的 06「冰蓝玻璃 W」，侧栏、浏览器图标与 macOS 图标统一使用透明背景。原图保存在 `assets/logo-source.png`。运行 `swift scripts/generate-logo.swift` 可生成不同尺寸的 PNG 与 ICNS，保持原始图形比例和颜色；随后运行 `./build.sh` 更新应用包。
 
 ## 页面前进与后退
 

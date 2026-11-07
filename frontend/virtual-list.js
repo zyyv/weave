@@ -1,3 +1,4 @@
+import {getLocale} from './i18n.js';
 // Viewport-only DOM. Grid cards keep their natural height; row offsets follow measured content.
 export class VirtualList {
  constructor(scroller,root,paint,onEnd){
@@ -12,7 +13,7 @@ export class VirtualList {
   this.columns=list?1:Math.max(1,Math.floor((width+16)/((scopes?270:compact?130:158)+16)));this.gap=list?0:16;this.height=scopes?(compact?200:228):list?88:compact?175:210;
   this.rows=[];let top=0,bucket=[],date='';
   const flush=()=>{if(!bucket.length)return;const height=list?this.height:Math.max(...bucket.map(item=>this.heights.get(this.itemKey(item))||this.height));this.rows.push({items:bucket,top,height});top+=height+this.gap;bucket=[]};
-  for(const item of this.items||[]){const next=group?new Date(item.modified).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'}):'';if(next!==date){flush();date=next;this.rows.push({label:date,top,height:64});top+=64}bucket.push(item);if(bucket.length===this.columns)flush()}
+  for(const item of this.items||[]){const next=group?new Date(item.modified).toLocaleDateString(getLocale(),{year:'numeric',month:'long',day:'numeric'}):'';if(next!==date){flush();date=next;this.rows.push({label:date,top,height:64});top+=64}bucket.push(item);if(bucket.length===this.columns)flush()}
   flush();this.root.style.height=top+'px';this.key='';
  }
  draw(){

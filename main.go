@@ -62,6 +62,7 @@ func main() {
 	if e != nil {
 		log.Fatal(e)
 	}
+	message := func(key string) string { return localizedMessage(prefs.Get(lib.Status().Root).Preferences.Locale, key) }
 	if e = lib.Scan(*root); e != nil {
 		log.Print(e)
 	}
@@ -94,11 +95,13 @@ func main() {
 			return
 		}
 		if o := r.Header.Get("Origin"); o != "" && o != origin {
-			http.Error(w, "不允许的来源", 403)
+			http.Error(w, message("errors.origin"), 403)
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, prefix)
-		fail := func(err error) { http.Error(w, err.Error(), 400) }
+		fail := func(err error) {
+			http.Error(w, localizedError(prefs.Get(lib.Status().Root).Preferences.Locale, err.Error()), 400)
+		}
 		jsonOut := func(v any) { w.Header().Set("Content-Type", "application/json"); json.NewEncoder(w).Encode(v) }
 		if strings.HasPrefix(path, "api/") {
 			if r.Method != "GET" && r.Method != "POST" {
@@ -112,7 +115,9 @@ func main() {
 			}
 			switch action {
 			case "status":
-				jsonOut(lib.Status())
+				status := lib.Status()
+				status.Error = localizedError(prefs.Get(status.Root).Preferences.Locale, status.Error)
+				jsonOut(status)
 			case "settings":
 				if r.Method == "POST" {
 					var p preferences.Preferences
@@ -133,7 +138,7 @@ func main() {
 					return
 				}
 				if len(in) > 5000 {
-					fail(fmt.Errorf("每次最多导入 5000 个绑定"))
+					fail(fmt.Errorf("%s", message("errors.bindingLimit")))
 					return
 				}
 				st := lib.Status()
@@ -143,7 +148,7 @@ func main() {
 				}
 				for k := range in {
 					if !known[k] {
-						fail(fmt.Errorf("不存在的会话目录：%s", k))
+						fail(fmt.Errorf(message("errors.unknownConversation"), k))
 						return
 					}
 				}
@@ -174,10 +179,10 @@ func main() {
 				jsonOut(true)
 			case "choose":
 				if *serve {
-					fail(fmt.Errorf("请在桌面应用中选择目录"))
+					fail(fmt.Errorf("%s", message("errors.desktopChoose")))
 					return
 				}
-				paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: "选择微信资源目录", Directory: true, DefaultPath: lib.Status().Root})
+				paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: message("native.chooseResources"), Directory: true, DefaultPath: lib.Status().Root})
 				if e != nil {
 					fail(e)
 					return
@@ -188,7 +193,7 @@ func main() {
 						return
 					}
 					if e = os.WriteFile(settings, []byte(paths[0]), 0600); e != nil {
-						fail(fmt.Errorf("目录已切换，但保存设置失败：%w", e))
+						fail(fmt.Errorf(message("errors.saveSource"), e))
 						return
 					}
 				}
@@ -216,7 +221,7 @@ func main() {
 					return
 				}
 				if len(in.IDs) == 0 {
-					fail(fmt.Errorf("请选择资源"))
+					fail(fmt.Errorf("%s", message("errors.selectResources")))
 					return
 				}
 				if action == "reveal" {
@@ -233,10 +238,10 @@ func main() {
 					return
 				}
 				if *serve {
-					fail(fmt.Errorf("请在桌面应用中导出资源"))
+					fail(fmt.Errorf("%s", message("errors.desktopExport")))
 					return
 				}
-				paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: "选择导出目录", Directory: true, CreateDirectories: true})
+				paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: message("native.chooseExport"), Directory: true, CreateDirectories: true})
 				if e != nil {
 					fail(e)
 					return
@@ -247,7 +252,7 @@ func main() {
 				}
 				n, e := lib.Export(in.IDs, paths[0])
 				if e != nil {
-					fail(fmt.Errorf("已导出 %d 个，随后失败：%w", n, e))
+					fail(fmt.Errorf(message("errors.partialExport"), n, e))
 					return
 				}
 				jsonOut(map[string]int{"count": n})
@@ -264,7 +269,7 @@ func main() {
 			}
 			defer f.Close()
 			if (x.Ext != ".silk" && x.Ext != ".amr") || x.Size > 16*1024*1024 {
-				http.Error(w, "语音格式不支持或超过 16 MiB", 415)
+				http.Error(w, message("errors.voiceFormat"), 415)
 				return
 			}
 			w.Header().Set("Content-Type", "application/octet-stream")
@@ -299,12 +304,12 @@ func main() {
 				f.Seek(0, 0)
 				t := http.DetectContentType(b[:n])
 				if !strings.HasPrefix(t, "image/") {
-					http.Error(w, "此格式暂不支持预览", 415)
+					http.Error(w, message("errors.previewFormat"), 415)
 					return
 				}
 				w.Header().Set("Content-Type", t)
 			default:
-				http.Error(w, "此格式暂不支持内嵌预览，请导出后打开", 415)
+				http.Error(w, message("errors.inlineFormat"), 415)
 				return
 			}
 			http.ServeContent(w, r, x.Name, time.UnixMilli(x.Modified), f)
@@ -318,7 +323,7 @@ func main() {
 			}
 			defer f.Close()
 			if x.Ext != ".txt" && x.Ext != ".md" && x.Ext != ".csv" {
-				fail(fmt.Errorf("不支持此文本格式"))
+				fail(fmt.Errorf("%s", message("errors.textFormat")))
 				return
 			}
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -344,7 +349,7 @@ func main() {
 		select {}
 	}
 	mygo.App.WhenReady(func() {
-		mygo.NewWindow(mygo.WindowOptions{Title: "Weave · 微信资源库", URL: base, BackgroundColor: "#212121", Width: 1440, Height: 920, MinWidth: 840, MinHeight: 620, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}})
+		mygo.NewWindow(mygo.WindowOptions{Title: message("weaveWechatResources"), URL: base, BackgroundColor: "#212121", Width: 1440, Height: 920, MinWidth: 840, MinHeight: 620, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}})
 	})
 	if e = mygo.App.Run(); e != nil {
 		log.Fatal(e)

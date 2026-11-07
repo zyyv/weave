@@ -1,0 +1,52 @@
+{
+  "$schema": "https://x18n.dev/schema/config.json",
+  "sourceLocale": "zh-CN",
+  "locales": [
+    "zh-CN",
+    "en"
+  ],
+  "presets": [],
+  "resources": [
+    {
+      "pattern": "frontend/locales/{locale}.json"
+    }
+  ],
+  "keyStyle": "flat",
+  "usage": {
+    "include": [
+      "frontend/*.js",
+      "frontend/index.html",
+      "main.go"
+    ],
+    "calls": [
+      {
+        "callee": "t",
+        "params": {
+          "arg": 1
+        }
+      }
+    ],
+    "regex": [
+      {
+        "extensions": [
+          "html"
+        ],
+        "patterns": [
+          "data-i18n(?:-title|-aria-label|-placeholder)?=\"({key})\""
+        ]
+      },
+      {
+        "extensions": [
+          "go"
+        ],
+        "patterns": [
+          "message\\(\"({key})\""
+        ]
+      }
+    ],
+    "keysInUse": [
+      "errors.*"
+    ]
+  },
+  "strict": true
+}
