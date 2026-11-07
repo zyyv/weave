@@ -62,7 +62,7 @@ func buildIndex(items []Item) *catalogIndex {
 			}
 			g := byKind[x.Kind]
 			if g.Hash == "" {
-				g = Scope{Hash: x.Group, Counts: map[string]int{}, Covers: []string{}}
+				g = Scope{Hash: x.Group, Counts: map[string]int{}, Covers: []ScopeCover{}}
 			}
 			addScope(&g, x)
 			byKind[x.Kind] = g
@@ -77,8 +77,8 @@ func addScope(g *Scope, x Item) {
 	if x.Modified > g.Modified {
 		g.Modified = x.Modified
 	}
-	if x.Preview != "" && len(g.Covers) < 4 {
-		g.Covers = append(g.Covers, x.Preview)
+	if (x.Kind == "image" || x.Kind == "video") && len(g.Covers) < 4 {
+		g.Covers = append(g.Covers, ScopeCover{ID: x.ID, Kind: x.Kind, Preview: x.Preview, Modified: x.Modified})
 	}
 }
 func kindsFor(s string) map[string]bool {

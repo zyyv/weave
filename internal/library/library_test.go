@@ -234,3 +234,50 @@ func BenchmarkScopeSizeMetadata(b *testing.B) {
 		lib.Scopes(Query{Sort: "size", Limit: 24})
 	}
 }
+
+func TestScopeCoversFollowMediaFilters(t *testing.T) {
+	lib := &Library{marks: map[string]Mark{}}
+	lib.items = []Item{
+		{ID: "video-no-thumb", Group: "a", Kind: "video", Name: "clip.mp4", Modified: 4},
+		{ID: "image", Group: "a", Kind: "image", Name: "photo.jpg", Preview: "image-thumb", Modified: 3},
+		{ID: "video-with-thumb", Group: "a", Kind: "video", Name: "clip2.mp4", Preview: "video-thumb", Modified: 2},
+		{ID: "audio", Group: "a", Kind: "audio", Name: "voice.silk", Modified: 1},
+	}
+	lib.index = buildIndex(lib.items)
+	for _, item := range lib.items {
+		lib.marks[item.ID] = Mark{Star: true}
+	}
+	// Exercise both the indexed summaries and the search/favorites aggregation.
+	for _, filter := range []Query{{}, {Search: "."}, {Star: true}} {
+		for _, kind := range []string{"image", "video", "image,video"} {
+			q := filter
+			q.Kind = kind
+			scopes := lib.Scopes(q)
+			if scopes.Total != 1 {
+				t.Fatalf("missing scope for %+v: %+v", q, scopes)
+			}
+			covers := scopes.Items[0].Covers
+			want := 3
+			if kind == "image" {
+				want = 1
+			}
+			if kind == "video" {
+				want = 2
+			}
+			if len(covers) != want {
+				t.Fatalf("wrong cover count for %+v: %+v", q, covers)
+			}
+			for _, cover := range covers {
+				if !kindsFor(kind)[cover.Kind] || cover.ID == "" || cover.Modified == 0 {
+					t.Fatalf("cover outside filter or missing metadata: %+v", cover)
+				}
+				if cover.ID == "video-no-thumb" && cover.Preview != "" {
+					t.Fatalf("unpaired video should be captured by ID: %+v", cover)
+				}
+				if cover.ID == "image" && cover.Preview != "image-thumb" {
+					t.Fatalf("image lost paired thumbnail: %+v", cover)
+				}
+			}
+		}
+	}
+}

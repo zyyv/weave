@@ -332,13 +332,20 @@ func (l *Library) Export(ids []string, dest string) (int, error) {
 	return n, nil
 }
 
+type ScopeCover struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Preview  string `json:"preview"`
+	Modified int64  `json:"modified"`
+}
+
 type Scope struct {
 	Hash     string         `json:"hash"`
 	Count    int            `json:"count"`
 	Bytes    int64          `json:"bytes"`
 	Modified int64          `json:"modified"`
 	Counts   map[string]int `json:"counts"`
-	Covers   []string       `json:"covers"`
+	Covers   []ScopeCover   `json:"covers"`
 }
 type Scopes struct {
 	Items     []Scope `json:"items"`
@@ -358,7 +365,7 @@ func (l *Library) Scopes(q Query) Scopes {
 			if q.Group != "" && hash != q.Group {
 				continue
 			}
-			g := &Scope{Hash: hash, Counts: map[string]int{}, Covers: []string{}}
+			g := &Scope{Hash: hash, Counts: map[string]int{}, Covers: []ScopeCover{}}
 			for _, kind := range []string{"image", "video", "audio", "document", "other"} {
 				part, ok := byKind[kind]
 				if !ok || (len(kinds) > 0 && !kinds[kind]) {
@@ -398,7 +405,7 @@ func (l *Library) Scopes(q Query) Scopes {
 			}
 			g := m[x.Group]
 			if g == nil {
-				g = &Scope{Hash: x.Group, Counts: map[string]int{}, Covers: []string{}}
+				g = &Scope{Hash: x.Group, Counts: map[string]int{}, Covers: []ScopeCover{}}
 				m[x.Group] = g
 			}
 			addScope(g, x)
