@@ -1,0 +1,12 @@
+{
+  "name": "weave",
+  "version": "0.2.3",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check frontend/app.js && node --check frontend/player.js && node --check frontend/settings.js && node --check frontend/navigation.js && node --check frontend/virtual-list.js && node --check frontend/select.js && node --check frontend/video-covers.js && node --check frontend/audio-player.js && node --check frontend/audio-cache.js && node --check frontend/audio-codec-worker.js",
+    "dev": "go run .",
+    "build": "./build.sh",
+    "test": "go test ./..."
+  }
+}

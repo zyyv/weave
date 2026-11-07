@@ -1,0 +1,2 @@
+import {decode} from './vendor/silk.mjs';
+self.onmessage=async e=>{try{const result=await decode(e.data,24000);if(!result.data.length||result.data.length>128*1024*1024)throw Error('语音解码结果无效或过长');const src=new DataView(result.data.buffer,result.data.byteOffset,result.data.byteLength);const samples=new Float32Array(src.byteLength/2);for(let i=0;i<samples.length;i++)samples[i]=src.getInt16(i*2,true)/32768;self.postMessage({samples,rate:24000},[samples.buffer])}catch(err){self.postMessage({error:err.message})}};

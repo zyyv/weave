@@ -1,0 +1,30 @@
+import {acquireAudio} from './audio-cache.js';
+const svg=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${p}"/></svg>`;
+const play=svg('m9 5 11 7-11 7Z'),pause=svg('M8 5v14M16 5v14'),time=s=>Number.isFinite(s)?`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`:'0:00';
+const nativePeaks=new Map();
+let bundle;const loadWaveSurfer=()=>bundle??=import('./vendor/wavesurfer/wavesurfer.js').catch(e=>{bundle=null;throw e});
+export function mountAudioPlayer(root,item,prefs,onPreference){
+ let disposed=false,wave=null,decoded=null;const abort=new AbortController();
+ root.innerHTML=`<div class="media-player audio-shell wave-audio"><div class="audio-heading"><span class="audio-mark">${svg('M9 18V5l12-2v13M9 18c0 4-7 4-7 0s7-4 7 0Zm12-2c0 4-7 4-7 0s7-4 7 0Z')}</span><div><strong>音频播放</strong><span class="audio-format"></span></div></div><div class="audio-wave" role="slider" tabindex="0" aria-label="音频波形，左右方向键调整进度" aria-valuemin="0" aria-valuemax="100"></div><audio preload="metadata"></audio><div class="audio-transport"><button class="audio-play" aria-label="播放" disabled>${play}</button><button class="audio-rewind" aria-label="后退 10 秒">${svg('M3 10V4h6M3 4a9 9 0 1 1-1 10')}</button><span class="audio-time"><span class="audio-current">0:00</span><span>/</span><span class="audio-duration">0:00</span></span><label class="audio-volume-label">${svg('M11 4 6 8H2v8h4l5 4ZM15 8a6 6 0 0 1 0 8')}<input class="audio-volume" type="range" aria-label="音量" min="0" max="1" step="0.01"></label><select class="audio-speed" data-search="never" aria-label="播放速度"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option></select></div><input class="audio-seek" type="range" aria-label="播放进度" min="0" max="1000" value="0"><p class="player-status" role="status">正在准备音频…</p></div>`;
+ const $=s=>root.querySelector(s),media=$('audio'),status=$('.player-status');media.volume=prefs.volume;media.playbackRate=prefs.speed;$('.audio-volume').value=prefs.volume;$('.audio-speed').value=String(prefs.speed);$('.audio-format').textContent=item.ext.slice(1).toUpperCase()+' 音频';
+ const sync=()=>{if(disposed)return;const duration=media.duration||decoded?.duration||0;$('.audio-current').textContent=time(media.currentTime);$('.audio-duration').textContent=time(duration);$('.audio-seek').value=duration?media.currentTime/duration*1000:0;$('.audio-wave').setAttribute('aria-valuenow',String(Math.round(duration?media.currentTime/duration*100:0)));$('.audio-play').innerHTML=media.paused?play:pause;$('.audio-play').setAttribute('aria-label',media.paused?'播放':'暂停')};
+ const error=message=>{if(!disposed)status.textContent=message};
+ for(const event of ['timeupdate','play','pause','ended','loadedmetadata','seeked'])media.addEventListener(event,sync,{signal:abort.signal});
+ media.addEventListener('canplay',()=>{if(!disposed){$('.audio-play').disabled=false;if(!status.dataset.keep)status.textContent=''}},{signal:abort.signal});
+ media.addEventListener('error',()=>error('此音频暂无法播放，可导出后打开。'),{signal:abort.signal});
+ $('.audio-play').onclick=()=>{if(media.paused)wave.play().catch(e=>error('播放失败：'+e.message));else wave.pause()};$('.audio-rewind').onclick=()=>{media.currentTime=Math.max(0,media.currentTime-10)};
+ $('.audio-seek').oninput=e=>{if(Number.isFinite(media.duration))wave.setTime(media.duration*Number(e.target.value)/1000)};
+ $('.audio-volume').oninput=e=>{wave?.setVolume(Number(e.target.value));onPreference('volume',Number(e.target.value))};$('.audio-speed').onchange=e=>{wave?.setPlaybackRate(Number(e.target.value));onPreference('speed',Number(e.target.value))};
+ $('.audio-wave').onkeydown=e=>{if(!wave||!Number.isFinite(media.duration))return;if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();e.stopPropagation();wave.setTime(e.key==='Home'?0:e.key==='End'?media.duration:Math.max(0,Math.min(media.duration,media.currentTime+(e.key==='ArrowLeft'?-5:5))))}};
+ async function start(){try{
+  const prepared=['.silk','.amr'].includes(item.ext)?acquireAudio(item,abort.signal):Promise.resolve(null);
+  const [module,audio]=await Promise.all([loadWaveSurfer(),prepared.then(value=>{decoded=value;if(disposed)value?.release();return value})]);decoded=audio;if(disposed){audio?.release();return}
+  const theme=getComputedStyle(root);wave=module.default.create({container:$('.audio-wave'),media,backend:'MediaElement',height:110,barWidth:3,barGap:3,barRadius:2,barMinHeight:2,cursorWidth:1,waveColor:theme.getPropertyValue('--audio').trim(),progressColor:theme.getPropertyValue('--text').trim(),cursorColor:theme.getPropertyValue('--secondary').trim(),dragToSeek:{debounceTime:80},normalize:false});
+  wave.on('error',e=>{if(!disposed&&media.readyState<2)error('波形加载失败：'+e.message)});
+  if(audio){$('.audio-format').textContent=audio.codec+' 音频';await wave.load(audio.url,[audio.peaks],audio.duration)}
+  else if(item.size<=8*1024*1024){const key=`${item.id}:${item.modified}:${item.size}`,cached=nativePeaks.get(key);if(cached)await wave.load('media/'+item.id,cached.peaks,cached.duration);else{await wave.load('media/'+item.id);if(!disposed){nativePeaks.set(key,{peaks:wave.exportPeaks({channels:1,maxLength:2048}),duration:wave.getDuration()});if(nativePeaks.size>12)nativePeaks.delete(nativePeaks.keys().next().value)}}}
+  else{root.querySelector('.wave-audio').dataset.streaming='true';media.src='media/'+item.id;status.dataset.keep='1';status.textContent='大音频按需播放，不进行整段波形分析。'}
+  if(disposed)return;wave.setVolume(prefs.volume);wave.setPlaybackRate(prefs.speed);$('.audio-play').disabled=false;if(!status.dataset.keep)status.textContent='';sync();
+ }catch(e){if(e.name!=='AbortError')error('音频加载失败：'+e.message)}}start();
+ return()=>{disposed=true;abort.abort();wave?.destroy();media.pause();media.removeAttribute('src');media.load();decoded?.release();root.replaceChildren()};
+}
