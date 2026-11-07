@@ -27,11 +27,9 @@ import (
 //go:embed frontend/*
 var assets embed.FS
 
-const defaultRoot = "/Users/chris/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/2.0b4.0.9/68d46285476237152f68ab907dc88d0a/Message/MessageTemp"
-
 func main() {
 	serve := flag.Bool("serve", false, "仅启动本地浏览器预览服务")
-	root := flag.String("root", defaultRoot, "资源目录")
+	root := flag.String("root", "", "资源目录")
 	data := flag.String("data", "", "收藏和标签目录")
 	frontendPath := flag.String("frontend", "", "开发预览前端目录，仅 --serve 可用")
 	flag.Parse()
@@ -63,8 +61,10 @@ func main() {
 		log.Fatal(e)
 	}
 	message := func(key string) string { return localizedMessage(prefs.Get(lib.Status().Root).Preferences.Locale, key) }
-	if e = lib.Scan(*root); e != nil {
-		log.Print(e)
+	if *root != "" {
+		if e = lib.Scan(*root); e != nil {
+			log.Print(e)
+		}
 	}
 	listener, e := net.Listen("tcp", "127.0.0.1:0")
 	if e != nil {
@@ -330,7 +330,8 @@ func main() {
 			io.Copy(w, io.LimitReader(f, 128*1024))
 			return
 		}
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self' blob:; worker-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; style-src-elem 'self' 'sha256-/wNXXQM7c2ofBcjrAABoSS5Ibbo1K6dLnomtT2ZNGIA=' 'sha256-20mtW7QL/m+GnGSlicaFajrhxQFmju52t2iGt9eIJ9A=' 'sha256-wMWywP4oD7M3MPJrCTXT/qIrEodBE+KXIgZo+N4zqb8=' 'sha256-zz2BvW4NBXbVhIbcWeI/pDZ75RKV4RxP8kKCc1LmW4E='; script-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		// Hashes allow only the bundled player styles, including its thumbnail shadow template.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self' blob:; worker-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; style-src-elem 'self' 'sha256-/wNXXQM7c2ofBcjrAABoSS5Ibbo1K6dLnomtT2ZNGIA=' 'sha256-20mtW7QL/m+GnGSlicaFajrhxQFmju52t2iGt9eIJ9A=' 'sha256-wMWywP4oD7M3MPJrCTXT/qIrEodBE+KXIgZo+N4zqb8=' 'sha256-zz2BvW4NBXbVhIbcWeI/pDZ75RKV4RxP8kKCc1LmW4E=' 'sha256-PbfLgFhtMIK34HBZHnBgjlprY2JWgUyFJC2UTVSMIKQ='; script-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 		if path == "codec-worker.js" || path == "audio-codec-worker.js" || path == "vendor/amr-worker.js" {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'")
 		}
@@ -349,7 +350,7 @@ func main() {
 		select {}
 	}
 	mygo.App.WhenReady(func() {
-		mygo.NewWindow(mygo.WindowOptions{Title: message("weaveWechatResources"), URL: base, BackgroundColor: "#212121", Width: 1440, Height: 920, MinWidth: 840, MinHeight: 620, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}})
+		mygo.NewWindow(mygo.WindowOptions{Title: message("weaveResourceLibrary"), URL: base, BackgroundColor: "#212121", Width: 1440, Height: 920, MinWidth: 840, MinHeight: 620, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}})
 	})
 	if e = mygo.App.Run(); e != nil {
 		log.Fatal(e)

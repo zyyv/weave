@@ -19,6 +19,19 @@ func waitScan(t *testing.T, l *Library) {
 		runtime.Gosched()
 	}
 }
+func TestScanRequiresResourceDirectory(t *testing.T) {
+	l, err := New("", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = l.Scan(""); err == nil {
+		t.Fatal("empty root must not scan the working directory")
+	}
+	if status := l.Status(); status.Scanning || status.Total != 0 || status.Root != "" {
+		t.Fatalf("unexpected scan without a resource directory: %+v", status)
+	}
+}
+
 func TestLibraryWorkflow(t *testing.T) {
 	root := t.TempDir()
 	data := t.TempDir()
@@ -102,7 +115,7 @@ func TestScopesReconcileAndContactSearch(t *testing.T) {
 	}
 	l.Scan(root)
 	waitScan(t, l)
-	q := Query{Names: map[string]string{"a": "家人 wxid_test"}}
+	q := Query{Names: map[string]string{"a": "家人 account_test"}}
 	gs := l.Scopes(q)
 	if gs.Total != 2 || gs.Resources != 4 || gs.Bytes != 16 {
 		t.Fatalf("groups must reconcile after thumbnails filtered: %+v", gs)

@@ -1,18 +1,22 @@
 {
   "name": "weave",
-  "version": "0.2.3",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check frontend/app.js && node --check frontend/player.js && node --check frontend/settings.js && node --check frontend/navigation.js && node --check frontend/virtual-list.js && node --check frontend/select.js && node --check frontend/video-covers.js && node --check frontend/audio-player.js && node --check frontend/audio-cache.js && node --check frontend/audio-codec-worker.js && node --check frontend/i18n.js",
+    "check": "node scripts/check-version.mjs && node --check frontend/app.js && node --check frontend/player.js && node --check frontend/settings.js && node --check frontend/navigation.js && node --check frontend/virtual-list.js && node --check frontend/select.js && node --check frontend/video-covers.js && node --check frontend/audio-player.js && node --check frontend/audio-cache.js && node --check frontend/audio-codec-worker.js && node --check frontend/i18n.js && node --check frontend/icons.js && node scripts/generate-icons.mjs --check",
     "dev": "go run .",
     "build": "./build.sh",
     "test": "go test ./...",
     "i18n:check": "x18n check",
     "i18n:ui": "x18n ui",
-    "i18n": "x18n"
+    "i18n": "x18n",
+    "icons:generate": "node scripts/generate-icons.mjs",
+    "release": "bumpp"
   },
   "devDependencies": {
-    "@x18n/cli": "^0.1.13"
+    "@iconify-json/hugeicons": "1.2.35",
+    "@x18n/cli": "^0.1.13",
+    "bumpp": "^12.3.0"
   }
 }

@@ -6,10 +6,10 @@ import (
 )
 
 func TestLocalizedMessages(t *testing.T) {
-	if got := localizedMessage("en", "native.chooseResources"); got != "Choose WeChat resource folder" {
+	if got := localizedMessage("en", "native.chooseResources"); got != "Choose resource folder" {
 		t.Fatal(got)
 	}
-	if got := localizedMessage("unknown", "native.chooseResources"); got != "选择微信资源目录" {
+	if got := localizedMessage("unknown", "native.chooseResources"); got != "选择资源目录" {
 		t.Fatal(got)
 	}
 	if got := localizedError("en", "收藏文件读取失败: /tmp/中文.json"); got != "Could not read favorites: /tmp/中文.json" {

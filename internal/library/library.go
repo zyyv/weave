@@ -88,6 +88,9 @@ func kind(ext string) string {
 }
 func (l *Library) Scan(root string) error {
 	fail := func(e error) error { l.mu.Lock(); l.state.Error = e.Error(); l.mu.Unlock(); return e }
+	if strings.TrimSpace(root) == "" {
+		return fail(fmt.Errorf("请选择目录"))
+	}
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return fail(err)

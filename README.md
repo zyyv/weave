@@ -1,105 +1,94 @@
-# Weave · 微信资源库 0.2.3
+# Weave
 
-基于 MyGo v0.7.4 的 macOS 桌面资源管理器。界面参考 ChatGPT app 暗黑模式：炭灰内容区、深灰侧栏、平滑收合与固定操作区。使用系统 WKWebView，无需 Electron、Node 或 Go 运行环境。
+[简体中文](README.zh-CN.md)
 
-## 开始使用
+A macOS desktop app for browsing, organizing, and exporting files from local resource folders. Find images, videos, voice messages, and documents in one library, with conversation views and built-in media previews.
 
-1. 推荐解压 `build/Weave-macOS-arm64.zip`，将 Weave.app 拖入「应用程序」后打开。Documents 同步目录可能重新附加 Finder 元数据并干扰包签名，因此 ZIP 内的应用是验证过的分发版本。
-2. 自动扫描此前指定的微信 MessageTemp 目录。在「设置 → 数据与存储」中可查看和更换目录。
-3. 默认按会话目录展示资源，点击卡片进入会话。顶部按钮可切换「全部平铺」，选择会自动保存。
-4. 点击资源打开详情；勾选资源后点击「导出所选」，通过系统弹窗选择目标目录。每批最多 200 个。
-5. 在「设置 → 会话绑定」中给目录关联你确认的联系人或群聊名称。
+Built with Go and MyGo, using the system WKWebView. The packaged app needs no Electron, Node.js, or Go runtime.
 
-## 多语言
+## Installation and first launch
 
-在「设置 → 通用 → 语言 / Language」切换简体中文与 English，立即生效并自动保存。日期、播放器控件和系统目录弹窗随语言切换；文件名、标签和联系人名称保留原文。语言文件打包在应用内，运行时不需要外网。
+Requires macOS 12 or later. Choose a package matching your Mac: `arm64` for Apple silicon or `amd64` for Intel. Availability depends on the files attached to the release.
 
-开发时需要 Node.js 22+。翻译由 [antfu 的 x18n](https://github.com/x18n-dev/x18n) 管理，界面使用本地 `t()` 翻译模块：
+1. Download and open the `.dmg` from this project's GitHub Releases.
+2. Drag **Weave.app** into **Applications**, then launch Weave from Applications. Eject the disk image after installation. Alternatively, download the ZIP, extract it, and move Weave.app into Applications.
+3. If macOS blocks the first launch, after attempting to open the app, go to **System Settings → Privacy & Security → Open Anyway**, authenticate if prompted, and confirm opening it. On older macOS versions, use **System Preferences → Security & Privacy → General**. macOS saves an exception for this app, so subsequent launches normally work directly.
 
-```sh
-npm ci
-npm run i18n:check   # 严格检查缺失、未使用词条及占位符
-npm run i18n:ui      # 打开翻译管理界面
-```
+**The current build uses only a local ad-hoc signature. It has no Apple Developer ID signature and is not notarized by Apple.** Only allow an app whose source you trust and which has not been tampered with; see [Apple's instructions](https://support.apple.com/en-us/102445). If macOS reports that the app is damaged or contains malware, stop installation, download it again, and report the exact message instead of treating it as an ordinary unidentified-developer warning.
 
-词条位于 `frontend/locales/zh-CN.json` 与 `frontend/locales/en.json`；配置位于 `x18n.config.json`。新增语言时，同步更新配置、前端支持列表和语言选项，以及 Go 设置的语言校验。
+## Build locally
 
-## 此次更新
-
-- 暗黑、浅色、跟随系统；经典／海岸／林间三套类型配色；分类颜色开关与舒适／紧凑密度，全部自动保存。
-- 侧栏平滑收合；窄屏使用遮罩抽屉；搜索、筛选和导出固定，资源区独立滚动。所有滚动条隐藏，取消焦点描边。
-- 默认按会话分组，汇总分类、数量、容量与封面；会话和资源均使用虚拟滚动，仅渲染可见区域并自动续载，不再分页。可切换为全部平铺。
-- 大预览与信息侧栏组成新的资源详情，支持上／下一个和方向键切换。
-- 统一播放器提供播放／暂停、进度拖动、后退 10 秒、音量／静音、0.5–2 倍速、视频全屏与真实语音波形。
-- 内置 SILK 与 AMR-NB 本地解码。按文件头选择编码器，兼容扩展名为 AMR、实际内容为 SILK 的微信语音。
-- 设置页包含通用、外观、播放器、会话绑定、数据与存储。
-- 会话绑定支持联系人、群聊、自定义分组；按名称与账号检索；支持 JSON 批量导入。映射按资源根目录隔离。
-
-保留资源分类、搜索、收藏、标签、原图与缩略图配对、文本预览、Finder 定位、批量复制导出等已有功能。
-
-## 数据与限制
-
-- 微信源目录仅读取，不执行删除、移动、重命名或写入。
-- 仅监听 `127.0.0.1` 的随机端口和随机访问路径，拒绝跨来源请求。播放与解码没有外网请求。
-- 管理信息保存在 `~/Library/Application Support/Weave/`：收藏与标签为 `marks.json`，资源目录为 `source.txt`，偏好与会话绑定为 `settings.json`。测试使用独立的工作目录状态。
-- 索引保存在内存，每次启动重新扫描；微信新增资源可点击重新扫描。
-- 哈希是微信资源目录的内部标识，本身不是可读姓名。本机 Contact 和 Session 数据库文件头不是明文 SQLite，当前不自动解密或提取联系人；由用户确认并保存对应关系，不根据哈希猜测姓名或验证账号归属。
-- SILK、AMR-NB 支持本地解码，每个文件上限 16 MiB、15 分钟；AMR-WB、损坏或加密的语音以及系统不支持的视频编码会显示错误提示，可导出原文件。预览生成的 WAV 仅存在于内存，不覆盖微信文件。
-- 加密 DAT/PIC 或系统不支持的图片仍无法预览。PDF、Office、HTML 等作为文件管理，不内嵌执行其内容。TXT、MD、CSV 最多预览前 128 KiB。
-- 文件修改时间来自文件系统，不能保证等于消息发送时间。源文件被微信清理时，预览或导出会报错，可重新扫描。
-- 容量使用 GiB / MiB / KiB；侧栏总容量包含缩略图，分类与列表默认排除缩略图。仅含缩略图的目录在默认会话视图不出现。
-- 导出复制为 `资源ID_原文件名`，不覆盖已有文件；发生部分失败时报告已导出数量。
-- 当前构建面向 Apple Silicon macOS，使用本地 ad-hoc 签名，未进行 Apple 公证。
-
-## 会话绑定导入
-
-在「设置 → 会话绑定」选择 JSON 文件。支持以当前目录内真实哈希为键的对象，值包含 `name`、可选的 `username` 和 `type`（person / group / custom）；也支持每条包含 `hash` 的数组。仅更新文件中列出的目录，未知目录和无效内容会拒绝整次导入。已有绑定不会被部分修改。
-
-## 开发
-
-要求 Go 1.27.3+。前端使用原生 JavaScript / CSS，无前端构建依赖。解码组件已固定版本静态打包，来源与许可证见 `THIRD_PARTY.md`。
+On macOS, install Go (see `go.mod` for the required version), then run:
 
 ```sh
-go run .
 ./build.sh
-go test -race ./...
-go vet ./...
-npm run check
 ```
 
-`build.sh` 在临时目录完成签名，生成 `build/Weave-macOS-arm64.zip` 并解压验证。`build/Weave.app` 为便捷副本，其元数据可能受 Documents 同步服务影响。`go run . --serve --data /tmp/weave-state` 启动同一后台的浏览器预览，终端输出本次访问地址；原生目录选择和导出弹窗仅在桌面模式提供。`--root` 指定资源目录，`--data` 指定状态目录。开发预览可额外传 `--frontend /绝对路径/frontend`，从磁盘读取界面文件，正式应用使用内嵌文件。
+The script reads the version from `package.json` and produces `build/Weave.app`, `build/Weave-v<version>-macOS-<arch>.dmg`, and `.zip`, using the local Go target architecture by default (typically `arm64` on Apple silicon). It verifies the app signature and DMG checksum. Use these generated packages; copying `.app` bundles directly through synced Documents folders can affect signing metadata.
 
-快捷键：⌘ K 搜索，⌘ \ 收合侧栏，⌘ , 设置。
+## Release a new version
 
-品牌图形采用选定的 06「冰蓝玻璃 W」，侧栏、浏览器图标与 macOS 图标统一使用透明背景。原图保存在 `assets/logo-source.png`。运行 `swift scripts/generate-logo.swift` 可生成不同尺寸的 PNG 与 ICNS，保持原始图形比例和颜色；随后运行 `./build.sh` 更新应用包。
+The release command uses [bumpp](https://github.com/antfu-collective/bumpp). Install Node.js 24.11+ (24.x) and npm, ensure Git can push to the repository, and run `npm ci` once. Commit the changes you want to release on `main` and start with a clean working tree:
 
-## 页面前进与后退
+```sh
+npm run release
+```
 
-顶部箭头支持资源分类、会话目录、设置页及设置分区之间往返，恢复搜索、筛选与滚动位置。无对应历史时置灰；后退后打开其他页面会清除原前进分支。支持 ⌘ [ / ⌘ ]，以及非输入状态下的 Alt + 左／右。历史只保留本次运行最近 100 个位置，更换资源根目录后重置。
+By default this increments the patch version, for example `0.0.1 → 0.0.2`. After confirmation, it updates `package.json`, the lockfile, MyGo configuration, and the settings-page version, runs checks, creates a release commit and `v0.0.2` tag, and pushes them to GitHub. The app bundle reads its version from `package.json`.
 
+To publish the initial `0.0.1` without incrementing it (before `v0.0.1` exists):
 
-## 连续浏览与媒体优化
+```sh
+npm run release -- --release 0.0.1
+```
 
-- 顶部操作区压缩，更新时间移至右上角，取消资源页脚；前进／后退位于侧栏折叠按钮左侧，收起侧栏后随折叠按钮进入顶栏。
-- 资源和会话目录采用固定行高虚拟渲染、视口外预留和按批自动续载；更换筛选会取消过期结果，前进／后退恢复滚动位置。选择已加载资源仍遵循每次最多 200 个的导出限制。
-- 会话详情按文件修改日期（本地时区）分组，日期由新到旧排列；此视图固定时间排序，返回全部资源后恢复原排序偏好。文件修改日期不等同于聊天发送日期。
-- 音频专属播放器显示真实采样波形，可点击或拖动波形定位，也支持方向键调整进度。SILK / AMR 使用本地解码采样；普通音频使用浏览器音频解码，超过 32 MiB 或无法解码的波形显示提示并保留进度条播放。
-- 视频封面优先使用微信缩略图，缺失时仅为视口附近视频提取帧；最多并行处理 2 个视频、缓存 120 张封面。封面仅存在于内存，原文件不修改；不支持的编码会显示封面暂不可用。
-- 所有下拉框统一使用可搜索的自定义列表，选项按需虚拟渲染，支持方向键、Home / End、Enter、Escape 和 Tab；在详情弹窗中同样可用。
+Use `npm run release -- --release 0.1.0` for an explicit version, or add `--yes` to skip bumpp's confirmation.
 
+Pushing a `v*` tag triggers GitHub Actions to check, test, and build Apple silicon DMG and ZIP packages on a macOS runner, generate `SHA256SUMS.txt`, and publish them to [Releases](https://github.com/zyyv/weave/releases). Building and uploading happen on GitHub. The workflow uses the automatic `GITHUB_TOKEN`; no Apple certificates or additional publishing tokens are required. GitHub Actions must be enabled for the repository.
 
-## 0.2.2 播放器与列表细节
+Follow progress in [Actions](https://github.com/zyyv/weave/actions/workflows/release.yml). After fixing a failure, rerun failed jobs; incomplete drafts can resume uploading, while published versions are never overwritten. A private repository's releases are accessible only to people with repository access. If a Git push fails after the local tag is created, finish pushing that commit and tag before bumping another version.
 
-- 音频和视频切换为 Video.js 10.3.0 的 Neutral 专用皮肤，按需加载本地依赖。保留真实采样波形、微信 SILK / AMR 解码、倍速和音量偏好。
-- 会话日期标题提升到 19px；列表新增类型、会话、标签、容量和精确到秒的修改时间。选中资源使用整行中性底色和独立复选框，不再为封面添加粗描边。
-- 会话下拉使用完整名称／标识，不在生成选项时截断。菜单随内容扩宽，长内容换行；选项仍按视口虚拟渲染。12 个以内选项默认不显示搜索，保留键盘操作并移除高亮焦点描边。
+## Features
 
+| Feature | What you can do |
+| --- | --- |
+| Browse your library | Explore files by conversation or in a flat view. Switch between grid and list layouts, sort by modification time, size, or name, and browse conversations grouped by date. |
+| Search and organize | Search filenames, tags, and bound conversation names or account identifiers. Combine file-type, conversation, and favorites filters; select multiple file types within a conversation. Add favorites and tags for later. |
+| Preview and play | View images, paired originals and thumbnails, file details, and TXT / MD / CSV previews. Play video and audio with seeking, volume, and speed controls; navigate audio with a waveform. Decode SILK and AMR-NB voice messages locally. |
+| Name conversations | Manually associate folder identifiers with confirmed contact names, group chats, or custom names. Import mappings in JSON; bindings are kept separately for each resource root. |
+| Export files | Reveal a file in Finder or copy up to 200 selected resources to a folder using the native directory picker. Exported files use `resourceID_originalFilename` and do not overwrite existing files. |
 
-## 0.2.3 性能与组合筛选
+The interface supports English and Simplified Chinese, dark / light / system appearance, three color palettes, and comfortable or compact spacing. Preferences are saved automatically. Virtual scrolling, thumbnail caching, and background audio decoding help keep large libraries responsive.
 
-- 扫描时构建只读资源排序索引、分会话索引和会话摘要。普通会话排序只访问摘要；资源列表按批查询索引，最多缓存 8 个查询结果，收藏／标签更新和重新扫描后失效。排序查询不读取资源内容。
-- 卡片使用服务端小图接口，输出不超过 384×240；最多并发解码 2 张，缓存 128 张。文件超过 12 MiB 或图片超过 2400 万像素时不生成列表封面，详情仍可打开原文件。标准 JPEG / PNG / GIF 可生成小图，其他编码失败时显示占位类型标记。
-- 虚拟网格按卡片实际高度测量，卡片本身使用自然高度；同排按最高卡片计算下一排位置，保留网格和滚动性能。
-- 会话内增加可多选的类型筛选：图片、视频、音频、文档、其他；多种类型采用 OR 关系，继续与关键词、收藏和会话条件组合，前进／后退恢复组合。
-- 独立 WaveSurfer 8 音频播放器使用真实波形与本机媒体流。微信 SILK / AMR 复用解码 Worker，PCM 遍历、WAV 封装和波形预计算均在 Worker 完成；解码缓存最多 12 项／24 MiB（当前播放资源单独保留）。普通音频缓存有限长度的波形；大于 8 MiB 的普通音频直接按需播放，不执行整段波形分析。
-- 切换条件会取消旧列表请求；选择框只响应选项变更，音频进度更新不再触发全页面选择框扫描。
+## Local data and limitations
+
+Weave reads the source directory without deleting, moving, renaming, or writing its files. Previews, playback, and voice decoding run locally without external requests. The local service listens only on `127.0.0.1`, using a random port and access path, and rejects cross-origin requests.
+
+Library metadata is stored separately in `~/Library/Application Support/Weave/`:
+
+| File | Contents |
+| --- | --- |
+| `marks.json` | Favorites and tags |
+| `source.txt` | Selected resource directory |
+| `settings.json` | Preferences and conversation bindings |
+
+- **Conversation names are manual.** Weave does not decrypt contact or session databases, infer names from folder hashes, or verify account ownership.
+- **Preview support depends on the format.** Encrypted DAT / PIC images and unsupported media codecs cannot be previewed. SILK / AMR-NB decoding is limited to 16 MiB per file and 15 minutes of decoded audio; AMR-WB is unsupported. Original files can still be exported.
+- **Documents have limited previews.** TXT / MD / CSV previews show up to the first 128 KiB. PDF, Office, and HTML files are managed as files without embedding or executing their contents.
+- **Dates and availability come from local files.** Modification times may differ from message timestamps. Files removed from the source directory are no longer available for preview or export; rescan to refresh the library.
+
+## Credit
+
+Weave uses these open-source projects:
+
+| Dependency | Role |
+| --- | --- |
+| [Hugeicons](https://icon-sets.iconify.design/hugeicons/) · `@iconify-json/hugeicons` 1.2.35 | Interface and player icons, bundled locally as SVG. [MIT](frontend/vendor/hugeicons/LICENSE.txt). |
+| [MyGo](https://github.com/egoist/mygo) · 0.7.4 | macOS desktop shell and system WKWebView integration. |
+| [WaveSurfer.js](https://github.com/katspaugh/wavesurfer.js) · 8.0.5 | Audio playback and waveform navigation. [BSD-3-Clause](frontend/vendor/wavesurfer/LICENSE). |
+| [Video.js](https://github.com/videojs/video.js) · 10.3.0 | Video playback with the Neutral skin, bundled from `@videojs/cdn`. [Apache-2.0](frontend/vendor/videojs/APACHE-LICENSE-2.0.txt); [upstream notices](frontend/vendor/videojs/LICENSE). |
+| [silk-wasm](https://github.com/idranme/silk-wasm) · 3.7.1 | Local decoding of SILK voice messages. [MIT](frontend/vendor/SILK-LICENSE.txt). |
+| [benz-amr-recorder](https://github.com/BenzLeung/benz-amr-recorder) · 1.1.5 | Local AMR-NB decoding using its worker source. [MIT and decoder notices](frontend/vendor/AMR-LICENSE.txt). |
+| [x18n](https://github.com/x18n-dev/x18n) | English and Simplified Chinese translation management during development. |
+
+Media dependencies are bundled locally. The SILK module and WebAssembly files are unmodified; the AMR decoder's CommonJS factory is wrapped for use as a standalone worker, without microphone or recording APIs. Decoder license notices are retained. Video.js production JavaScript and CSS and the WaveSurfer ESM bundle are retained with their licenses; package sources and integrity hashes are recorded in the respective `VENDORED.json` files. Playback and decoding use local assets, with no analytics or remote media services enabled.

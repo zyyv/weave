@@ -1,4 +1,5 @@
 import {t} from './i18n.js';
+import {iconSvg} from './icons.js';
 // Native form state + one shared listbox. Long labels wrap; only visible options mount.
 const controls=new Map();
 const optionGap=4;
@@ -27,7 +28,7 @@ function draw(){
   const {option,top,height}=rows[i],node=document.createElement('div');node.id='select-option-'+i;node.role='option';node.className='select-option'+(i===highlight?' highlighted':'');
   node.setAttribute('aria-selected',String(option.value===active.value));node.setAttribute('aria-disabled',String(option.disabled));node.style.top=top+'px';node.style.height=height+'px';
   const label=document.createElement('span');label.textContent=option.textContent;node.append(label);
-  if(option.value===active.value){const check=document.createElement('span');check.className='select-check';check.textContent='✓';check.setAttribute('aria-hidden','true');node.append(check)}
+  if(option.value===active.value){const check=document.createElement('span');check.className='select-check';check.innerHTML=iconSvg('check');check.setAttribute('aria-hidden','true');node.append(check)}
   node.onpointerdown=e=>e.preventDefault();node.onclick=()=>choose(i);spacer.append(node);if(i===highlight)renderedHighlight=true;
  }
  focusTarget().setAttribute('aria-activedescendant',renderedHighlight?'select-option-'+highlight:'');
@@ -72,7 +73,7 @@ export function installSelects(){
  const scan=()=>{
   document.querySelectorAll('select:not([data-custom])').forEach(select=>{
    select.dataset.custom='true';select.tabIndex=-1;select.setAttribute('aria-hidden','true');
-   const b=document.createElement('button');b.type='button';b.className='custom-select';b.setAttribute('aria-haspopup','listbox');b.setAttribute('aria-expanded','false');b.setAttribute('aria-controls','custom-options');b.innerHTML='<span></span><svg viewBox="0 0 20 20"><path d="m6 8 4 4 4-4"/></svg>';select.after(b);controls.set(select,b);
+   const b=document.createElement('button');b.type='button';b.className='custom-select';b.setAttribute('aria-haspopup','listbox');b.setAttribute('aria-expanded','false');b.setAttribute('aria-controls','custom-options');b.innerHTML=`<span></span>${iconSvg('down')}`;select.after(b);controls.set(select,b);
    b.onclick=()=>open(select);b.onkeydown=e=>{if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();open(select)}};select.addEventListener('change',syncSelects);
   });syncSelects();
  };
