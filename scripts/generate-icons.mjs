@@ -22,6 +22,11 @@ const names = {
   airplay: 'airplay', cast: 'cast', captions: 'closed-caption',
   check: 'tick-02', switches: 'sliders-horizontal', speed: 'dashboard-speed-01',
   speech: 'speech', spinner: 'loading-03', restart: 'replay',
+  add: 'plus-sign', zoomIn: 'zoom-in', zoomOut: 'zoom-out', fit: 'fit-to-screen',
+  transparency: 'transparency', camera: 'camera-01', lens: 'camera-lens', calendar: 'calendar-03',
+  clock: 'clock-01', color: 'colors', location: 'location-01', aperture: 'aperture',
+  ruler: 'ruler', info: 'information-circle', histogram: 'chart-histogram',
+  copy: 'copy-01', path: 'path', folderOpen: 'folder-open',
 };
 const markup = {};
 for (const [alias, name] of Object.entries(names)) {

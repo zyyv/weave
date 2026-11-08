@@ -110,11 +110,13 @@ func main() {
 				return
 			}
 			action := strings.TrimPrefix(path, "api/")
-			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "settings" {
+			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "settings" && action != "histogram" {
 				http.Error(w, "POST required", 405)
 				return
 			}
 			switch action {
+			case "histogram":
+				thumbnails.serveHistogram(w, r, lib, r.URL.Query().Get("id"))
 			case "status":
 				status := lib.Status()
 				status.Error = localizedError(prefs.Get(status.Root).Preferences.Locale, status.Error)
