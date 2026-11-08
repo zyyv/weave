@@ -29,6 +29,7 @@ var assets embed.FS
 
 func main() {
 	serve := flag.Bool("serve", false, "仅启动本地浏览器预览服务")
+	development := flag.Bool("dev", false, "启用开发工具和教程重播")
 	root := flag.String("root", "", "资源目录")
 	data := flag.String("data", "", "收藏和标签目录")
 	frontendPath := flag.String("frontend", "", "开发预览前端目录，仅 --serve 可用")
@@ -130,7 +131,10 @@ func main() {
 						return
 					}
 				}
-				jsonOut(prefs.Get(lib.Status().Root))
+				jsonOut(struct {
+					preferences.Snapshot
+					Development bool `json:"development"`
+				}{prefs.Get(lib.Status().Root), *development})
 			case "bindings":
 				var in map[string]preferences.Contact
 				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2*1024*1024)).Decode(&in); e != nil {

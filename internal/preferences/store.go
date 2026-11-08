@@ -9,18 +9,19 @@ import (
 )
 
 type Preferences struct {
-	Locale           string  `json:"locale"`
-	SidebarCollapsed bool    `json:"sidebarCollapsed"`
-	Theme            string  `json:"theme"`
-	Palette          string  `json:"palette"`
-	Grouped          bool    `json:"grouped"`
-	TypeColors       bool    `json:"typeColors"`
-	Thumbs           bool    `json:"thumbs"`
-	Density          string  `json:"density"`
-	View             string  `json:"view"`
-	Sort             string  `json:"sort"`
-	Volume           float64 `json:"volume"`
-	Speed            float64 `json:"speed"`
+	SetupTourDismissed bool    `json:"setupTourDismissed"`
+	Locale             string  `json:"locale"`
+	SidebarCollapsed   bool    `json:"sidebarCollapsed"`
+	Theme              string  `json:"theme"`
+	Palette            string  `json:"palette"`
+	Grouped            bool    `json:"grouped"`
+	TypeColors         bool    `json:"typeColors"`
+	Thumbs             bool    `json:"thumbs"`
+	Density            string  `json:"density"`
+	View               string  `json:"view"`
+	Sort               string  `json:"sort"`
+	Volume             float64 `json:"volume"`
+	Speed              float64 `json:"speed"`
 }
 type Contact struct {
 	Name     string `json:"name"`

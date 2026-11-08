@@ -26,27 +26,11 @@
 
 脚本从 `package.json` 读取版本，生成 `build/Weave.app`、`build/Weave-v<版本>-macOS-<架构>.dmg` 和 `.zip`，默认使用本机 Go 目标架构（Apple 芯片通常为 `arm64`），并校验应用签名与 DMG 校验和。请使用脚本生成的包；通过 Documents 同步目录直接复制 `.app` 可能影响签名元数据。
 
-## 发布新版本
+## 开发预览
 
-发布命令基于 [bumpp](https://github.com/antfu-collective/bumpp)。需要 Node.js 24.11+（24.x）、npm，以及推送仓库的 Git 权限；首次使用先运行 `npm ci`。在 `main` 分支提交准备发布的改动，保持工作区干净，再运行：
+运行 `npm run dev` 启动带开发工具的桌面应用；运行 `npm run dev:browser` 在浏览器中预览，前端修改后刷新即可。
 
-```sh
-npm run release
-```
-
-默认将补丁版本加一，例如 `0.0.1 → 0.0.2`，确认后同步更新 `package.json`、锁文件、MyGo 配置及设置页版本，执行检查、创建版本提交与 `v0.0.2` 标签，然后推送到 GitHub。安装包的版本从 `package.json` 自动读取。
-
-首次发布当前的 `0.0.1`（尚无 `v0.0.1` 标签）时使用：
-
-```sh
-npm run release -- --release 0.0.1
-```
-
-指定版本可使用 `npm run release -- --release 0.1.0`；增加 `--yes` 可跳过 bumpp 的版本确认。
-
-GitHub Actions 收到 `v*` 标签后，会在 macOS runner 上检查、测试并构建 Apple 芯片版 DMG 和 ZIP，生成 `SHA256SUMS.txt`，然后自动发布到 [Releases](https://github.com/zyyv/weave/releases)。本机无需重复构建或手动上传。工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需配置 Apple 证书或额外的发布 Token；仓库必须允许 GitHub Actions 运行。
-
-在 [Actions](https://github.com/zyyv/weave/actions/workflows/release.yml) 查看进度。失败时修复原因后可重跑失败任务；尚未发布的草稿会继续上传，已发布的版本不会被覆盖。仓库为私有时，Release 下载也仅对有访问权限的人开放。若 Git 推送失败但本地已生成标签，应先完成该版本提交和标签的推送，不要再次递增版本。
+开发模式通过 `--dev` 开关启用。在「设置 → 数据与存储」点击「重播教程（开发）」，即可从第一步反复预览，无需清空数据源或引导完成记录。最后点击「完成预览」结束。普通启动与打包应用默认关闭开发工具。
 
 ## 功能
 

@@ -26,27 +26,11 @@ On macOS, install Go (see `go.mod` for the required version), then run:
 
 The script reads the version from `package.json` and produces `build/Weave.app`, `build/Weave-v<version>-macOS-<arch>.dmg`, and `.zip`, using the local Go target architecture by default (typically `arm64` on Apple silicon). It verifies the app signature and DMG checksum. Use these generated packages; copying `.app` bundles directly through synced Documents folders can affect signing metadata.
 
-## Release a new version
+## Development preview
 
-The release command uses [bumpp](https://github.com/antfu-collective/bumpp). Install Node.js 24.11+ (24.x) and npm, ensure Git can push to the repository, and run `npm ci` once. Commit the changes you want to release on `main` and start with a clean working tree:
+Run `npm run dev` for the desktop app with development tools, or `npm run dev:browser` for a browser preview that reads frontend changes on refresh.
 
-```sh
-npm run release
-```
-
-By default this increments the patch version, for example `0.0.1 → 0.0.2`. After confirmation, it updates `package.json`, the lockfile, MyGo configuration, and the settings-page version, runs checks, creates a release commit and `v0.0.2` tag, and pushes them to GitHub. The app bundle reads its version from `package.json`.
-
-To publish the initial `0.0.1` without incrementing it (before `v0.0.1` exists):
-
-```sh
-npm run release -- --release 0.0.1
-```
-
-Use `npm run release -- --release 0.1.0` for an explicit version, or add `--yes` to skip bumpp's confirmation.
-
-Pushing a `v*` tag triggers GitHub Actions to check, test, and build Apple silicon DMG and ZIP packages on a macOS runner, generate `SHA256SUMS.txt`, and publish them to [Releases](https://github.com/zyyv/weave/releases). Building and uploading happen on GitHub. The workflow uses the automatic `GITHUB_TOKEN`; no Apple certificates or additional publishing tokens are required. GitHub Actions must be enabled for the repository.
-
-Follow progress in [Actions](https://github.com/zyyv/weave/actions/workflows/release.yml). After fixing a failure, rerun failed jobs; incomplete drafts can resume uploading, while published versions are never overwritten. A private repository's releases are accessible only to people with repository access. If a Git push fails after the local tag is created, finish pushing that commit and tag before bumping another version.
+The `--dev` flag enables development tools. In Settings → Data & storage, click Replay tour (dev) to preview from the first step without clearing the source folder or completion status. Click Finish preview at the last step. Development tools are off by default for normal launches and packaged apps.
 
 ## Features
 

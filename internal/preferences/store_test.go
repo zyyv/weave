@@ -9,9 +9,10 @@ func TestPreferencesAndRootIsolation(t *testing.T) {
 		t.Fatal(e)
 	}
 	p := s.Get("A").Preferences
-	if p.Theme != "dark" || !p.Grouped {
+	if p.Theme != "dark" || !p.Grouped || p.SetupTourDismissed {
 		t.Fatal("default view must be dark and grouped")
 	}
+	p.SetupTourDismissed = true
 	p.Theme = "light"
 	p.Palette = "ocean"
 	p.Speed = 1.5
@@ -28,7 +29,7 @@ func TestPreferencesAndRootIsolation(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if s2.Get("A").Preferences.Speed != 1.5 || s2.Get("A").Contacts["hash"].Name != "设计讨论" {
+	if !s2.Get("A").Preferences.SetupTourDismissed || s2.Get("A").Preferences.Speed != 1.5 || s2.Get("A").Contacts["hash"].Name != "设计讨论" {
 		t.Fatal("preferences or bindings lost on restart")
 	}
 	if e = s.Bind("A", map[string]Contact{"bad": {Name: "bad", Type: "invalid"}}); e == nil {
