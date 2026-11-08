@@ -20,6 +20,8 @@ type Item struct {
 	Name      string `json:"name"`
 	Path      string `json:"path"`
 	Group     string `json:"group"`
+	Folder    string `json:"folder"`
+	Directory bool   `json:"directory,omitempty"`
 	Kind      string `json:"kind"`
 	Ext       string `json:"ext"`
 	Size      int64  `json:"size"`
@@ -34,16 +36,20 @@ type Mark struct {
 	Tags string `json:"tags"`
 }
 type Status struct {
-	Root     string         `json:"root"`
-	Scanning bool           `json:"scanning"`
-	Scanned  int            `json:"scanned"`
-	Total    int            `json:"total"`
-	Bytes    int64          `json:"bytes"`
-	Counts   map[string]int `json:"counts"`
-	Groups   []string       `json:"groups"`
-	Error    string         `json:"error"`
-	Skipped  int            `json:"skipped"`
-	Updated  int64          `json:"updated"`
+	Root            string         `json:"root"`
+	Scanning        bool           `json:"scanning"`
+	Scanned         int            `json:"scanned"`
+	Total           int            `json:"total"`
+	Bytes           int64          `json:"bytes"`
+	Counts          map[string]int `json:"counts"`
+	AllCounts       map[string]int `json:"allCounts"`
+	Groups          []string       `json:"groups"`
+	Error           string         `json:"error"`
+	Skipped         int            `json:"skipped"`
+	Updated         int64          `json:"updated"`
+	DetectedMode    string         `json:"detectedMode"`
+	DetectionReason string         `json:"detectionReason"`
+	FolderCount     int            `json:"folderCount"`
 }
 type Library struct {
 	mu        sync.RWMutex
@@ -54,6 +60,7 @@ type Library struct {
 	stateFile string
 	index     *catalogIndex
 	cache     queryCache
+	folders   map[string]Item
 }
 
 func New(root, data string) (*Library, error) {
@@ -119,7 +126,9 @@ func (l *Library) Scan(root string) error {
 		items := make([]Item, 0, 10000)
 		byPath := map[string]int{}
 		groups := map[string]bool{}
+		folders := map[string]Item{}
 		counts := map[string]int{}
+		allCounts := map[string]int{}
 		var size int64
 		skipped := 0
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, e error) error {
@@ -134,6 +143,18 @@ func (l *Library) Scan(root string) error {
 				return nil
 			}
 			if d.IsDir() {
+				if path != root {
+					rel, _ := filepath.Rel(root, path)
+					parent := filepath.ToSlash(filepath.Dir(rel))
+					if parent == "." {
+						parent = ""
+					}
+					modified := int64(0)
+					if info, e := d.Info(); e == nil {
+						modified = info.ModTime().UnixMilli()
+					}
+					folders[filepath.ToSlash(rel)] = Item{ID: "folder:" + filepath.ToSlash(rel), Name: d.Name(), Folder: parent, Kind: "folder", Directory: true, Modified: modified}
+				}
 				return nil
 			}
 			if d.Type()&os.ModeSymlink != 0 {
@@ -160,8 +181,13 @@ func (l *Library) Scan(root string) error {
 			id := hex.EncodeToString(hash[:12])
 			thumb := strings.Contains(d.Name(), "_thumb") || ext == ".record_thumb"
 			byPath[path] = len(items)
-			items = append(items, Item{ID: id, Name: d.Name(), Path: path, Group: group, Kind: kind(ext), Ext: ext, Size: info.Size(), Modified: info.ModTime().UnixMilli(), Thumbnail: thumb})
+			parent := filepath.ToSlash(filepath.Dir(rel))
+			if parent == "." {
+				parent = ""
+			}
+			items = append(items, Item{ID: id, Name: d.Name(), Path: path, Group: group, Folder: parent, Kind: kind(ext), Ext: ext, Size: info.Size(), Modified: info.ModTime().UnixMilli(), Thumbnail: thumb})
 			size += info.Size()
+			allCounts[kind(ext)]++
 			if !thumb {
 				counts[kind(ext)]++
 			}
@@ -203,8 +229,12 @@ func (l *Library) Scan(root string) error {
 		l.index = index
 		l.resetCache()
 		l.items = items
+		l.folders = folders
 		l.ids = ids
 		l.state = Status{Root: root, Total: len(items), Scanned: len(items), Bytes: size, Counts: counts, Groups: gs, Skipped: skipped, Updated: time.Now().UnixMilli()}
+		l.state.DetectedMode, l.state.DetectionReason = detectSource(root, folders, items)
+		l.state.FolderCount = len(folders)
+		l.state.AllCounts = allCounts
 		if err != nil {
 			l.state.Error = err.Error()
 		}
@@ -220,16 +250,17 @@ type Query struct {
 	Offset, Limit             int
 }
 type Result struct {
-	Items []Item `json:"items"`
-	Total int    `json:"total"`
-	Bytes int64  `json:"bytes"`
+	Items     []Item `json:"items"`
+	Total     int    `json:"total"`
+	Bytes     int64  `json:"bytes"`
+	FileCount int    `json:"fileCount"`
 }
 
 func (l *Library) List(q Query) Result {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	matches := l.query(q)
-	r := Result{Items: []Item{}, Total: len(matches.indices), Bytes: matches.bytes}
+	r := Result{Items: []Item{}, Total: len(matches.indices), FileCount: len(matches.indices), Bytes: matches.bytes}
 	if q.Limit <= 0 || q.Limit > 200 {
 		q.Limit = 80
 	}

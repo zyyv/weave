@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-A macOS desktop app for browsing, organizing, and exporting files from local resource folders. Find images, videos, voice messages, and documents in one library, with conversation views and built-in media previews.
+A macOS desktop app for browsing, organizing, and exporting files from local resource folders. Find images, videos, voice messages, and documents in one library, with automatic detection of ordinary folders and WeChat conversation resources, plus built-in media previews.
 
 Built with Go and MyGo, using the system WKWebView. The packaged app needs no Electron, Node.js, or Go runtime.
 
@@ -36,7 +36,8 @@ The `--dev` flag enables development tools. In Settings → Data & storage, clic
 
 | Feature | What you can do |
 | --- | --- |
-| Browse your library | Explore files by conversation or in a flat view. Switch between grid and list layouts, sort by modification time, size, or name, and browse conversations grouped by date. |
+| Browse your library | Browse ordinary folders by their real hierarchy, including empty folders, with breadcrumb navigation. Browse WeChat resources by conversation. Both sources support a flat file view, grid and list layouts, and sorting by modification time, size, or name. Conversations group files by date. |
+| Detect folder type | Detection is automatic by default. See the detected type and active mode in **Settings → Data & storage**. Override with Ordinary folder or WeChat conversations, or restore Automatic. Mode and grouping choices are saved separately for each resource root. |
 | Search and organize | Search filenames, tags, and bound conversation names or account identifiers. Combine file-type, conversation, and favorites filters; select multiple file types within a conversation. Add favorites and tags for later. |
 | Preview and play | View images, paired originals and thumbnails, file details, and TXT / MD / CSV previews. Play video and audio with seeking, volume, and speed controls; navigate audio with a waveform. Decode SILK and AMR-NB voice messages locally. |
 | Name conversations | Manually associate folder identifiers with confirmed contact names, group chats, or custom names. Import mappings in JSON; bindings are kept separately for each resource root. |
@@ -54,7 +55,7 @@ Library metadata is stored separately in `~/Library/Application Support/Weave/`:
 | --- | --- |
 | `marks.json` | Favorites and tags |
 | `source.txt` | Selected resource directory |
-| `settings.json` | Preferences and conversation bindings |
+| `settings.json` | Preferences, source modes and browsing choices, and conversation bindings |
 
 - **Conversation names are manual.** Weave does not decrypt contact or session databases, infer names from folder hashes, or verify account ownership.
 - **Preview support depends on the format.** Encrypted DAT / PIC images and unsupported media codecs cannot be previewed. SILK / AMR-NB decoding is limited to 16 MiB per file and 15 minutes of decoded audio; AMR-WB is unsupported. Original files can still be exported.

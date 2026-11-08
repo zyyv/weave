@@ -103,7 +103,7 @@ func matches(x Item, m Mark, q Query, kinds map[string]bool, search string) bool
 	if q.Star && !m.Star {
 		return false
 	}
-	return search == "" || strings.Contains(strings.ToLower(x.Name+" "+x.Group+" "+m.Tags+" "+q.Names[x.Group]), search)
+	return search == "" || strings.Contains(strings.ToLower(x.Name+" "+x.Folder+" "+x.Group+" "+m.Tags+" "+q.Names[x.Group]), search)
 }
 func (l *Library) candidates(q Query) []int {
 	order := q.Sort

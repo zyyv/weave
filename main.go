@@ -110,11 +110,32 @@ func main() {
 				return
 			}
 			action := strings.TrimPrefix(path, "api/")
-			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "settings" {
+			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" {
 				http.Error(w, "POST required", 405)
 				return
 			}
 			switch action {
+			case "source":
+				var in struct {
+					Root string `json:"root"`
+					preferences.Source
+				}
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				st := lib.Status()
+				if st.Scanning || st.Root != in.Root {
+					fail(fmt.Errorf("目录已变化，请重试"))
+					return
+				}
+				if e := prefs.SetSource(st.Root, in.Source); e != nil {
+					fail(e)
+					return
+				}
+				jsonOut(prefs.Get(st.Root))
+			case "histogram":
+				thumbnails.serveHistogram(w, r, lib, r.URL.Query().Get("id"))
 			case "status":
 				status := lib.Status()
 				status.Error = localizedError(prefs.Get(status.Root).Preferences.Locale, status.Error)
@@ -146,9 +167,19 @@ func main() {
 					return
 				}
 				st := lib.Status()
+				sourceMode := prefs.Get(st.Root).Source.Mode
+				if sourceMode == "auto" {
+					sourceMode = st.DetectedMode
+				}
+				if sourceMode != "wechat" {
+					fail(fmt.Errorf("当前目录不使用会话模式"))
+					return
+				}
 				known := map[string]bool{}
 				for _, g := range st.Groups {
-					known[g] = true
+					if g != "未分组" {
+						known[g] = true
+					}
 				}
 				for k := range in {
 					if !known[k] {
@@ -161,17 +192,31 @@ func main() {
 					return
 				}
 				jsonOut(prefs.Get(st.Root))
-			case "list", "scopes":
+			case "list", "scopes", "browse":
 				q := r.URL.Query()
 				offset, _ := strconv.Atoi(q.Get("offset"))
 				limit, _ := strconv.Atoi(q.Get("limit"))
 				names := map[string]string{}
-				for k, v := range prefs.Get(lib.Status().Root).Contacts {
-					names[k] = v.Name + " " + v.Username
+				st := lib.Status()
+				snapshot := prefs.Get(st.Root)
+				mode := snapshot.Source.Mode
+				if mode == "auto" {
+					mode = st.DetectedMode
+				}
+				if mode == "wechat" {
+					for k, v := range snapshot.Contacts {
+						names[k] = v.Name + " " + v.Username
+					}
+				}
+				if action == "scopes" && mode != "wechat" {
+					fail(fmt.Errorf("当前目录不使用会话模式"))
+					return
 				}
 				query := library.Query{Search: q.Get("search"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
 				if action == "scopes" {
 					jsonOut(lib.Scopes(query))
+				} else if action == "browse" {
+					jsonOut(lib.Browse(query, q.Get("folder")))
 				} else {
 					jsonOut(lib.List(query))
 				}
@@ -182,21 +227,34 @@ func main() {
 				}
 				jsonOut(true)
 			case "choose":
-				if *serve {
-					fail(fmt.Errorf("%s", message("errors.desktopChoose")))
-					return
+				var in struct {
+					Root string `json:"root"`
 				}
-				paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: message("native.chooseResources"), Directory: true, DefaultPath: lib.Status().Root})
-				if e != nil {
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
 					fail(e)
 					return
 				}
-				if len(paths) > 0 {
-					if e = lib.Scan(paths[0]); e != nil {
+				paths := []string{}
+				if in.Root != "" {
+					paths = append(paths, in.Root)
+				} else {
+					if *serve {
+						fail(fmt.Errorf("%s", message("errors.desktopChoose")))
+						return
+					}
+					var e error
+					paths, e = mygo.Dialog.Open(mygo.OpenDialogOptions{Title: message("native.chooseResources"), Directory: true, DefaultPath: lib.Status().Root})
+					if e != nil {
 						fail(e)
 						return
 					}
-					if e = os.WriteFile(settings, []byte(paths[0]), 0600); e != nil {
+				}
+				if len(paths) > 0 {
+					if e := lib.Scan(paths[0]); e != nil {
+						fail(e)
+						return
+					}
+					if e := os.WriteFile(settings, []byte(paths[0]), 0600); e != nil {
 						fail(fmt.Errorf(message("errors.saveSource"), e))
 						return
 					}

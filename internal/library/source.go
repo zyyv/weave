@@ -1,0 +1,112 @@
+package library
+
+import (
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+func isConversationHash(name string) bool {
+	if len(name) != 32 {
+		return false
+	}
+	for _, c := range strings.ToLower(name) {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// A hash alone is not evidence of a conversation. Recognize the known source
+// path, or a copied MessageTemp tree with both hashes and WeChat media layout.
+func detectSource(root string, folders map[string]Item, items []Item) (string, string) {
+	p := strings.ToLower(filepath.ToSlash(root))
+	if strings.EqualFold(filepath.Base(root), "MessageTemp") {
+		for _, segment := range strings.Split(p, "/") {
+			if segment == "com.tencent.xinwechat" || segment == "wechat" || segment == "weixin" {
+				return "wechat", "knownWechatPath"
+			}
+		}
+		for folder := range folders {
+			parts := strings.Split(folder, "/")
+			if len(parts) >= 2 && isConversationHash(parts[0]) {
+				switch strings.ToLower(parts[1]) {
+				case "image", "video", "audio", "file":
+					return "wechat", "wechatStructure"
+				}
+			}
+		}
+		for _, item := range items {
+			if isConversationHash(item.Group) && (item.Ext == ".silk" || item.Ext == ".record_thumb" || item.Ext == ".pic") {
+				return "wechat", "wechatStructure"
+			}
+		}
+	}
+	return "folder", "ordinaryDirectory"
+}
+
+// Browse uses only the scanned catalog; a client path never opens a filesystem
+// path. Folders and files share pagination so large directories stay virtualized.
+func (l *Library) Browse(q Query, folder string) Result {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	r := Result{Items: []Item{}}
+	if folder != "" {
+		if _, ok := l.folders[folder]; !ok {
+			return r
+		}
+	}
+	entries := []Item{}
+	dirs := map[string]bool{}
+	filtered := q.Search != "" || q.Kind != "" || q.Star
+	for _, i := range l.query(q).indices {
+		x := l.items[i]
+		if x.Folder == folder {
+			m := l.marks[x.ID]
+			x.Star, x.Tags = m.Star, m.Tags
+			entries = append(entries, x)
+			r.FileCount++
+			r.Bytes += x.Size
+		} else {
+			rel := x.Folder
+			if folder != "" {
+				if !strings.HasPrefix(rel, folder+"/") {
+					continue
+				}
+				rel = strings.TrimPrefix(rel, folder+"/")
+			}
+			dirs[path.Join(folder, strings.Split(rel, "/")[0])] = true
+		}
+	}
+	for rel, d := range l.folders {
+		nameMatch := q.Search != "" && q.Kind == "" && !q.Star && strings.Contains(strings.ToLower(rel), strings.ToLower(q.Search))
+		if d.Folder == folder && (!filtered || dirs[rel] || nameMatch) {
+			entries = append(entries, d)
+		}
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		a, b := entries[i], entries[j]
+		if a.Directory != b.Directory {
+			return a.Directory
+		}
+		if q.Sort == "size" && a.Size != b.Size {
+			return a.Size > b.Size
+		}
+		if q.Sort != "name" && q.Sort != "size" && a.Modified != b.Modified {
+			return a.Modified > b.Modified
+		}
+		return a.Name < b.Name
+	})
+	r.Total = len(entries)
+	start := max(0, q.Offset)
+	limit := q.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 80
+	}
+	if start < r.Total {
+		r.Items = entries[start:min(start+limit, r.Total)]
+	}
+	return r
+}

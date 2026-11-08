@@ -23,7 +23,7 @@ export class VirtualList {
   let end=lo;while(end<this.rows.length&&this.rows[end].top<bottom+350)end++;
   const key=lo+':'+end;
   if(key!==this.key){
-   this.key=key;const rows=this.rows.slice(lo,end);this.paint(rows.flatMap(r=>r.items||[]));let index=0;const nodes=[...this.root.children],measure=[];
+   this.key=key;const rows=this.rows.slice(lo,end);this.root.querySelectorAll('.time-group').forEach(node=>node.remove());this.paint(rows.flatMap(r=>r.items||[]));let index=0;const nodes=[...this.root.children],measure=[];
    for(const row of rows){
     if(row.label){const h=document.createElement('h2');h.className='time-group';h.textContent=row.label;h.style.top=row.top+'px';this.root.append(h);continue}
     for(let col=0;col<row.items.length;col++){

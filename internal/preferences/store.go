@@ -28,9 +28,16 @@ type Contact struct {
 	Username string `json:"username"`
 	Type     string `json:"type"`
 }
+
+// Source choices belong to a resource root, independently of app appearance.
+type Source struct {
+	Mode    string `json:"mode"`
+	Grouped bool   `json:"grouped"`
+}
 type disk struct {
 	Preferences Preferences                   `json:"preferences"`
 	Bindings    map[string]map[string]Contact `json:"bindings"`
+	Sources     map[string]Source             `json:"sources"`
 }
 type Store struct {
 	mu   sync.Mutex
@@ -40,6 +47,7 @@ type Store struct {
 type Snapshot struct {
 	Preferences Preferences        `json:"preferences"`
 	Contacts    map[string]Contact `json:"contacts"`
+	Source      Source             `json:"source"`
 }
 
 func New(dir string) (*Store, error) {
@@ -54,6 +62,9 @@ func New(dir string) (*Store, error) {
 	if s.data.Bindings == nil {
 		s.data.Bindings = map[string]map[string]Contact{}
 	}
+	if s.data.Sources == nil {
+		s.data.Sources = map[string]Source{}
+	}
 	return s, nil
 }
 func (s *Store) Get(root string) Snapshot {
@@ -63,7 +74,26 @@ func (s *Store) Get(root string) Snapshot {
 	for k, v := range s.data.Bindings[root] {
 		m[k] = v
 	}
-	return Snapshot{s.data.Preferences, m}
+	source, ok := s.data.Sources[root]
+	if !ok {
+		source = Source{Mode: "auto", Grouped: true}
+	}
+	return Snapshot{Preferences: s.data.Preferences, Contacts: m, Source: source}
+}
+func (s *Store) SetSource(root string, source Source) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if root == "" || (source.Mode != "auto" && source.Mode != "folder" && source.Mode != "wechat") {
+		return fmt.Errorf("无效的目录模式")
+	}
+	next := map[string]Source{}
+	for k, v := range s.data.Sources {
+		next[k] = v
+	}
+	next[root] = source
+	d := s.data
+	d.Sources = next
+	return s.save(d)
 }
 func (s *Store) save(d disk) error {
 	b, e := json.MarshalIndent(d, "", "  ")

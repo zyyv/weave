@@ -89,3 +89,39 @@ func TestLocalePersistenceAndValidation(t *testing.T) {
 		t.Fatal("legacy preference did not fall back to Chinese")
 	}
 }
+
+func TestSourceModeIsolationAndPersistence(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Get("A").Source; p.Mode != "auto" || !p.Grouped {
+		t.Fatalf("source default: %+v", p)
+	}
+	if err := s.SetSource("A", Source{Mode: "wechat", Grouped: false}); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Get("B").Source; p.Mode != "auto" || !p.Grouped {
+		t.Fatal("source preferences leaked")
+	}
+	s, err = New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Get("A").Source; p.Mode != "wechat" || p.Grouped {
+		t.Fatal("source choice lost on restart")
+	}
+	if err := s.SetSource("A", Source{Mode: "invalid"}); err == nil {
+		t.Fatal("invalid source mode accepted")
+	}
+	if s.Get("A").Source.Mode != "wechat" {
+		t.Fatal("failed save changed source")
+	}
+	if err := s.SetSource("A", Source{Mode: "auto", Grouped: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Get("A").Contacts) != 0 || s.Get("A").Source.Mode != "auto" {
+		t.Fatal("could not restore automatic mode")
+	}
+}
