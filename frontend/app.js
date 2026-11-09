@@ -50,6 +50,15 @@ async function api(path,data,signal){const r=await fetch('api/'+path,data===unde
 const toastRoot=$('#toast');
 const toastCards=[];
 const toastDismissals=new WeakMap();
+const toastGlyphs={
+ success:'<path d="m6 10 2.5 2.5L14 7"/>',
+ error:'<path d="M10 5.5v5M10 14.5h.01"/>',
+ warning:'<path d="M10 7v4M10 14.5h.01"/>'
+};
+function toastGlyph(type){
+ const shape=type==='warning'?'<path class="toast-icon-fill" d="M8.3 3.6a2 2 0 0 1 3.4 0l7 11.4a2 2 0 0 1-1.7 3H3a2 2 0 0 1-1.7-3Z"/>':'<circle class="toast-icon-fill" cx="10" cy="10" r="9"/>';
+ return `<svg viewBox="0 0 20 20">${shape}${toastGlyphs[type]}</svg>`;
+}
 const toastResize=new ResizeObserver(layoutToasts);
 
 function placeToasts(){
@@ -69,24 +78,29 @@ for(const dialog of $$('dialog')){
 }
 
 function layoutToasts(){
+ const frontHeight=toastCards[0]?.offsetHeight||0;
  let offset=0;
  toastCards.forEach((card,depth)=>{
-  card.style.setProperty('--depth',depth);
+  const scale=1-depth*.045;
+  card.style.setProperty('--stack-scale',scale);
+  card.style.setProperty('--stack-lift',(card.offsetHeight*scale-frontHeight-depth*9)+'px');
   card.style.setProperty('--expanded-offset',offset+'px');
   card.toggleAttribute('data-front',depth===0);
   offset+=card.offsetHeight+8;
  });
  toastRoot.style.setProperty('--stack-height',Math.max(0,offset-8)+'px');
- toastRoot.style.setProperty('--front-height',(toastCards[0]?.offsetHeight||0)+'px');
+ toastRoot.style.setProperty('--front-height',frontHeight+'px');
 }
 
 function toast(message,type='info'){
+ let persistent=type==='loading';
  const card=document.createElement('div');
  card.className='toast-card';
  card.dataset.type=type;
  const mark=document.createElement('span');
  mark.className='toast-icon';
- mark.innerHTML=icon(type==='success'?'check':'info');
+ if(type==='loading')mark.append(loadingMark());
+ else if(toastGlyphs[type])mark.innerHTML=toastGlyph(type);
  mark.setAttribute('aria-hidden','true');
  const text=document.createElement('span');
  text.className='toast-message';
@@ -101,19 +115,23 @@ function toast(message,type='info'){
  function dismiss(){
   if(card.classList.contains('is-leaving'))return;
   clearTimeout(timer);
-  card.classList.add('is-leaving');
+  const last=toastCards.length===1;
+  if(!last)card.style.transform=getComputedStyle(card).transform;
+  card.classList.add(last?'is-sliding-out':'is-fading-out','is-leaving');
   card.inert=true;
   toastCards.splice(toastCards.indexOf(card),1);
   toastResize.unobserve(card);
   layoutToasts();
-  setTimeout(()=>{
+  function remove(){
    card.remove();
    if(!toastRoot.childElementCount&&toastRoot.hidePopover&&toastRoot.matches(':popover-open')){
     toastRoot.hidePopover();
    }
-  },380);
+  }
+  Promise.allSettled(card.getAnimations().map(animation=>animation.finished)).then(remove);
  }
  function updateTimer(){
+  if(persistent)return;
   const paused=card.matches(':hover, :focus-within');
   if(paused&&timer){
    clearTimeout(timer);
@@ -126,14 +144,19 @@ function toast(message,type='info'){
  }
  close.onclick=dismiss;
  toastDismissals.set(card,dismiss);
- card.append(mark,text,close);
+ if(mark.hasChildNodes())card.append(mark);
+ card.append(text);
+ if(type!=='loading')card.append(close);
  toastRoot.append(card);
  placeToasts();
  text.textContent=String(message??'');
  toastCards.unshift(card);
  toastResize.observe(card);
  layoutToasts();
- if(toastCards.length>3)toastDismissals.get(toastCards.at(-1))();
+ if(toastCards.length>3){
+  const oldest=toastCards.findLast(item=>item.dataset.type!=='loading');
+  if(oldest)toastDismissals.get(oldest)();
+ }
  requestAnimationFrame(()=>requestAnimationFrame(()=>{
   if(!card.inert)card.classList.add('is-visible');
  }));
@@ -141,6 +164,17 @@ function toast(message,type='info'){
   card.addEventListener(event,()=>queueMicrotask(updateTimer));
  }
  updateTimer();
+ return {
+  update:message=>{if(text.textContent!==message)text.textContent=message},
+  settle(message){
+   card.dataset.type='info';
+   mark.remove();
+   text.textContent=message;
+   card.append(close);
+   persistent=false;
+   updateTimer();
+  }
+ };
 }
 async function action(fn){try{await fn()}catch(e){toast(e.message,'error')}}
 function color(el,k){el.style.setProperty('--kind-color',`var(--${k})`)}
