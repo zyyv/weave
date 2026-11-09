@@ -1,9 +1,16 @@
 import {t} from './i18n.js';
 // Capture only visible videos, two at a time; keep a bounded thumbnail cache.
-const cache=new Map(),pending=new Set(),queue=[];let running=0,observed=[];
+const cache=new Map(),pending=new Set(),queue=[];let running=0,observed=[],generation=0;
 const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(!entry.isIntersecting)continue;observer.unobserve(entry.target);const img=entry.target,id=img.dataset.video;if(cache.has(id)){show(img,cache.get(id));continue}queue.push({img,id});pump()}},{root:document.querySelector('#resourceScroll'),rootMargin:'150px'});
 export function observeVideoCovers(root){observed=observed.filter(img=>{if(img.isConnected)return true;observer.unobserve(img);return false});root.querySelectorAll('img[data-video]').forEach(img=>{if(!observed.includes(img)){observed.push(img);observer.observe(img)}})}
-function pump(){while(running<2&&queue.length){const job=queue.shift();if(!job.img.isConnected)continue;if(cache.has(job.id)){show(job.img,cache.get(job.id));continue}if(pending.has(job.id)){queue.push(job);return}running++;pending.add(job.id);capture(job.id).then(url=>{if(url){cache.set(job.id,url);if(cache.size>120)cache.delete(cache.keys().next().value);if(job.img.isConnected)show(job.img,url)}else if(job.img.isConnected){job.img.hidden=true;job.img.parentElement.classList.add('cover-unavailable');job.img.setAttribute('aria-hidden','true')}}).finally(()=>{pending.delete(job.id);running--;pump()})}}
+function pump(){while(running<2&&queue.length){const job=queue.shift();if(!job.img.isConnected)continue;if(cache.has(job.id)){show(job.img,cache.get(job.id));continue}if(pending.has(job.id)){queue.push(job);return}running++;pending.add(job.id);const capturedGeneration=generation;capture(job.id).then(url=>{if(capturedGeneration!==generation)return;if(url){cache.set(job.id,url);if(cache.size>120)cache.delete(cache.keys().next().value);if(job.img.isConnected)show(job.img,url)}else if(job.img.isConnected){job.img.hidden=true;job.img.parentElement.classList.add('cover-unavailable');job.img.setAttribute('aria-hidden','true')}}).finally(()=>{pending.delete(job.id);running--;pump()})}}
 function capture(id){return new Promise(resolve=>{const video=document.createElement('video');video.muted=true;video.playsInline=true;video.preload='metadata';let done=false;const finish=url=>{if(done)return;done=true;clearTimeout(timer);video.onloadedmetadata=video.onloadeddata=video.onseeked=video.onerror=null;video.removeAttribute('src');video.load();resolve(url)};const timer=setTimeout(()=>finish(null),8000);video.onerror=()=>finish(null);let sought=false;video.onloadedmetadata=()=>{video.currentTime=Number.isFinite(video.duration)?Math.min(.5,video.duration/2):0;sought=true};const snap=()=>{if(!video.videoWidth)return;try{const c=document.createElement('canvas');const scale=Math.min(320/video.videoWidth,180/video.videoHeight);c.width=Math.max(1,Math.round(video.videoWidth*scale));c.height=Math.max(1,Math.round(video.videoHeight*scale));c.getContext('2d').drawImage(video,0,0,c.width,c.height);finish(c)}catch{finish(null)}};video.onseeked=snap;video.onloadeddata=()=>{if(sought&&video.currentTime===0)snap()};video.src='media/'+id})}
 
 function show(img,source){const c=document.createElement('canvas');c.width=source.width;c.height=source.height;c.setAttribute('aria-label',t('videoCover'));c.getContext('2d').drawImage(source,0,0);img.replaceWith(c)}
+
+export function clearVideoCovers(){
+ generation++;
+ cache.clear();queue.length=0;
+ observed.forEach(img=>observer.unobserve(img));
+ observed=[];
+}

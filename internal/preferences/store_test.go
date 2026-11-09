@@ -105,12 +105,18 @@ func TestSourceModeIsolationAndPersistence(t *testing.T) {
 	if p := s.Get("B").Source; p.Mode != "auto" || !p.Grouped {
 		t.Fatal("source preferences leaked")
 	}
+	if err := s.SetSource("B", Source{Mode: "folder", Grouped: true, Timeline: true}); err != nil {
+		t.Fatal(err)
+	}
 	s, err = New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p := s.Get("A").Source; p.Mode != "wechat" || p.Grouped {
 		t.Fatal("source choice lost on restart")
+	}
+	if p := s.Get("B").Source; p.Mode != "folder" || !p.Timeline || p.Grouped {
+		t.Fatalf("timeline choice lost on restart: %+v", p)
 	}
 	if err := s.SetSource("A", Source{Mode: "invalid"}); err == nil {
 		t.Fatal("invalid source mode accepted")

@@ -47,23 +47,37 @@ func main() {
 			rootExplicit = true
 		}
 	})
-	settings := filepath.Join(*data, "source.txt")
-	if !rootExplicit {
-		if b, err := os.ReadFile(settings); err == nil && len(b) > 0 {
-			*root = string(b)
-		}
-	}
-	lib, e := library.New(*root, *data)
-	if e != nil {
+	if e := os.MkdirAll(*data, 0700); e != nil {
 		log.Fatal(e)
 	}
 	prefs, e := preferences.New(*data)
 	if e != nil {
 		log.Fatal(e)
 	}
+	if last, _ := prefs.Directories(); last == "" {
+		if b, err := os.ReadFile(filepath.Join(*data, "source.txt")); err == nil && len(b) > 0 {
+			legacy, err := filepath.Abs(string(b))
+			if err != nil {
+				log.Fatal(err)
+			}
+			if resolved, err := library.ProbeRoot(legacy); err == nil {
+				legacy = resolved
+			}
+			if err := prefs.ImportDirectory(legacy); err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+	if !rootExplicit {
+		*root, _ = prefs.Directories()
+	}
+	lib, e := library.New(*root, *data)
+	if e != nil {
+		log.Fatal(e)
+	}
 	message := func(key string) string { return localizedMessage(prefs.Get(lib.Status().Root).Preferences.Locale, key) }
 	if *root != "" {
-		if e = lib.Scan(*root); e != nil {
+		if e = lib.ScanDirectory(*root, prefs.OpenDirectory); e != nil {
 			log.Print(e)
 		}
 	}
@@ -100,6 +114,11 @@ func main() {
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, prefix)
+		token := vaultCookie(r)
+		setVaultCookie := func(value string, maxAge int) {
+			http.SetCookie(w, &http.Cookie{Name: "weave-vault", Value: value, Path: prefix,
+				HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
+		}
 		fail := func(err error) {
 			http.Error(w, localizedError(prefs.Get(lib.Status().Root).Preferences.Locale, err.Error()), 400)
 		}
@@ -110,11 +129,72 @@ func main() {
 				return
 			}
 			action := strings.TrimPrefix(path, "api/")
-			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" {
+			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" {
 				http.Error(w, "POST required", 405)
 				return
 			}
 			switch action {
+			case "directories":
+				last, dirs := prefs.Directories()
+				type entry struct {
+					preferences.Directory
+					Broken bool `json:"broken"`
+				}
+				entries := make([]entry, 0, len(dirs))
+				for _, dir := range dirs {
+					_, err := library.ProbeRoot(dir.Path)
+					entries = append(entries, entry{dir, err != nil})
+				}
+				jsonOut(struct {
+					LastRoot string  `json:"lastRoot"`
+					Entries  []entry `json:"entries"`
+				}{last, entries})
+			case "directory-name":
+				var in struct{ Root, Name string }
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				if e := prefs.NameDirectory(in.Root, in.Name); e != nil {
+					fail(e)
+					return
+				}
+				jsonOut(true)
+			case "vault-unlock":
+				var in struct {
+					Root, PIN string
+					Create    bool
+				}
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				session, e := lib.UnlockVault(in.Root, in.PIN, in.Create)
+				if e != nil {
+					fail(e)
+					return
+				}
+				setVaultCookie(session, 0)
+				jsonOut(true)
+			case "vault-lock":
+				lib.LockVault(token)
+				setVaultCookie("", -1)
+				jsonOut(true)
+			case "vault-items":
+				var in struct {
+					Root    string
+					IDs     []string
+					Private bool
+				}
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2*1024*1024)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				if e := lib.SetPrivate(in.Root, token, in.IDs, in.Private); e != nil {
+					fail(e)
+					return
+				}
+				jsonOut(true)
 			case "source":
 				var in struct {
 					Root string `json:"root"`
@@ -137,7 +217,7 @@ func main() {
 			case "histogram":
 				thumbnails.serveHistogram(w, r, lib, r.URL.Query().Get("id"))
 			case "status":
-				status := lib.Status()
+				status := lib.Status(token)
 				status.Error = localizedError(prefs.Get(status.Root).Preferences.Locale, status.Error)
 				jsonOut(status)
 			case "settings":
@@ -212,7 +292,12 @@ func main() {
 					fail(fmt.Errorf("当前目录不使用会话模式"))
 					return
 				}
-				query := library.Query{Search: q.Get("search"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
+				private := q.Get("private") == "1"
+				if private && (action == "scopes" || !lib.Status(token).VaultUnlocked) {
+					http.Error(w, message("errors.vaultLocked"), http.StatusForbidden)
+					return
+				}
+				query := library.Query{Private: private, VaultToken: token, Search: q.Get("search"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
 				if action == "scopes" {
 					jsonOut(lib.Scopes(query))
 				} else if action == "browse" {
@@ -250,16 +335,12 @@ func main() {
 					}
 				}
 				if len(paths) > 0 {
-					if e := lib.Scan(paths[0]); e != nil {
+					if e := lib.ScanDirectory(paths[0], prefs.OpenDirectory); e != nil {
 						fail(e)
 						return
 					}
-					if e := os.WriteFile(settings, []byte(paths[0]), 0600); e != nil {
-						fail(fmt.Errorf(message("errors.saveSource"), e))
-						return
-					}
 				}
-				jsonOut(true)
+				jsonOut(len(paths) > 0)
 			case "mark":
 				var in struct {
 					ID string `json:"id"`
@@ -269,7 +350,7 @@ func main() {
 					fail(e)
 					return
 				}
-				if e := lib.Mark(in.ID, in.Mark); e != nil {
+				if e := lib.Mark(in.ID, in.Mark, token); e != nil {
 					fail(e)
 					return
 				}
@@ -287,7 +368,7 @@ func main() {
 					return
 				}
 				if action == "reveal" {
-					x, e := lib.Item(in.IDs[0])
+					x, e := lib.Item(in.IDs[0], token)
 					if e != nil {
 						fail(e)
 						return
@@ -312,7 +393,7 @@ func main() {
 					jsonOut(map[string]int{"count": 0})
 					return
 				}
-				n, e := lib.Export(in.IDs, paths[0])
+				n, e := lib.Export(in.IDs, paths[0], token)
 				if e != nil {
 					fail(fmt.Errorf(message("errors.partialExport"), n, e))
 					return
@@ -324,7 +405,7 @@ func main() {
 			return
 		}
 		if strings.HasPrefix(path, "raw/") {
-			f, x, e := lib.Open(strings.TrimPrefix(path, "raw/"))
+			f, x, e := lib.Open(strings.TrimPrefix(path, "raw/"), token)
 			if e != nil {
 				http.NotFound(w, r)
 				return
@@ -351,7 +432,7 @@ func main() {
 				http.Error(w, "method", 405)
 				return
 			}
-			f, x, e := lib.Open(strings.TrimPrefix(path, "media/"))
+			f, x, e := lib.Open(strings.TrimPrefix(path, "media/"), token)
 			if e != nil {
 				http.NotFound(w, r)
 				return
@@ -378,7 +459,7 @@ func main() {
 			return
 		}
 		if path == "text" {
-			f, x, e := lib.Open(r.URL.Query().Get("id"))
+			f, x, e := lib.Open(r.URL.Query().Get("id"), token)
 			if e != nil {
 				fail(e)
 				return
@@ -417,4 +498,12 @@ func main() {
 	if e = mygo.App.Run(); e != nil {
 		log.Fatal(e)
 	}
+}
+
+func vaultCookie(r *http.Request) string {
+	cookie, err := r.Cookie("weave-vault")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
 }

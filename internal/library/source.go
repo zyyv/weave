@@ -53,11 +53,15 @@ func (l *Library) Browse(q Query, folder string) Result {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	r := Result{Items: []Item{}}
+	if q.Private && !l.vaultAuthorized(q.VaultToken) {
+		return r
+	}
 	if folder != "" {
-		if _, ok := l.folders[folder]; !ok {
+		if _, ok := l.folders[folder]; !ok || !l.folderVisible(folder, q.Private) {
 			return r
 		}
 	}
+	r.FolderPrivateEntry = q.Private && l.vault.records[l.state.Root].Paths[folder]
 	entries := []Item{}
 	dirs := map[string]bool{}
 	filtered := q.Search != "" || q.Kind != "" || q.Star
@@ -66,7 +70,7 @@ func (l *Library) Browse(q Query, folder string) Result {
 		if x.Folder == folder {
 			m := l.marks[x.ID]
 			x.Star, x.Tags = m.Star, m.Tags
-			entries = append(entries, x)
+			entries = append(entries, l.itemForView(x, q.Private))
 			r.FileCount++
 			r.Bytes += x.Size
 		} else {
@@ -82,7 +86,8 @@ func (l *Library) Browse(q Query, folder string) Result {
 	}
 	for rel, d := range l.folders {
 		nameMatch := q.Search != "" && q.Kind == "" && !q.Star && strings.Contains(strings.ToLower(rel), strings.ToLower(q.Search))
-		if d.Folder == folder && (!filtered || dirs[rel] || nameMatch) {
+		if d.Folder == folder && l.folderVisible(rel, q.Private) && (!filtered || dirs[rel] || nameMatch) {
+			d.PrivateEntry = q.Private && l.vault.records[l.state.Root].Paths[rel]
 			entries = append(entries, d)
 		}
 	}
@@ -109,4 +114,12 @@ func (l *Library) Browse(q Query, folder string) Result {
 		r.Items = entries[start:min(start+limit, r.Total)]
 	}
 	return r
+}
+
+func (l *Library) folderVisible(rel string, private bool) bool {
+	owner := l.privateOwner(filepath.Join(l.state.Root, rel))
+	if private {
+		return owner == l.state.Root || l.vault.ancestors[rel]
+	}
+	return owner == ""
 }

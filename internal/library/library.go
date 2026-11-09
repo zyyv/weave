@@ -16,26 +16,29 @@ import (
 )
 
 type Item struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Group     string `json:"group"`
-	Folder    string `json:"folder"`
-	Directory bool   `json:"directory,omitempty"`
-	Kind      string `json:"kind"`
-	Ext       string `json:"ext"`
-	Size      int64  `json:"size"`
-	Modified  int64  `json:"modified"`
-	Thumbnail bool   `json:"thumbnail"`
-	Preview   string `json:"preview"`
-	Star      bool   `json:"star"`
-	Tags      string `json:"tags"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Group        string `json:"group"`
+	Folder       string `json:"folder"`
+	Directory    bool   `json:"directory,omitempty"`
+	PrivateEntry bool   `json:"privateEntry,omitempty"`
+	Kind         string `json:"kind"`
+	Ext          string `json:"ext"`
+	Size         int64  `json:"size"`
+	Modified     int64  `json:"modified"`
+	Thumbnail    bool   `json:"thumbnail"`
+	Preview      string `json:"preview"`
+	Star         bool   `json:"star"`
+	Tags         string `json:"tags"`
 }
 type Mark struct {
 	Star bool   `json:"star"`
 	Tags string `json:"tags"`
 }
 type Status struct {
+	VaultConfigured bool           `json:"vaultConfigured"`
+	VaultUnlocked   bool           `json:"vaultUnlocked"`
 	Root            string         `json:"root"`
 	Scanning        bool           `json:"scanning"`
 	Scanned         int            `json:"scanned"`
@@ -61,6 +64,8 @@ type Library struct {
 	index     *catalogIndex
 	cache     queryCache
 	folders   map[string]Item
+	vault     vaultState
+	dataDir   string
 }
 
 func New(root, data string) (*Library, error) {
@@ -76,6 +81,10 @@ func New(root, data string) (*Library, error) {
 		return nil, e
 	}
 	l.index = buildIndex(nil)
+	l.dataDir, _ = ProbeRoot(data)
+	if err := l.loadVault(data); err != nil {
+		return nil, err
+	}
 	l.state = Status{Root: root, Counts: map[string]int{}, Groups: []string{}}
 	return l, nil
 }
@@ -93,31 +102,57 @@ func kind(ext string) string {
 		return "other"
 	}
 }
-func (l *Library) Scan(root string) error {
-	fail := func(e error) error { l.mu.Lock(); l.state.Error = e.Error(); l.mu.Unlock(); return e }
+
+// ProbeRoot verifies that the directory can actually be listed.
+func ProbeRoot(root string) (string, error) {
 	if strings.TrimSpace(root) == "" {
-		return fail(fmt.Errorf("请选择目录"))
+		return "", fmt.Errorf("请选择目录")
 	}
-	root, err := filepath.Abs(root)
+	abs, err := filepath.Abs(root)
 	if err != nil {
-		return fail(err)
+		return "", err
 	}
-	root, err = filepath.EvalSymlinks(root)
+	abs, err = filepath.EvalSymlinks(abs)
 	if err != nil {
-		return fail(err)
+		return "", err
 	}
-	st, err := os.Stat(root)
+	f, err := os.Open(abs)
 	if err != nil {
-		return fail(err)
+		return "", err
 	}
-	if !st.IsDir() {
-		return fail(fmt.Errorf("请选择目录"))
+	defer f.Close()
+	if _, err := f.Readdirnames(1); err != nil && err != io.EOF {
+		return "", err
 	}
+	return resolvedDirectory(f, abs), nil
+}
+
+func (l *Library) Scan(root string) error {
+	return l.ScanDirectory(root, nil)
+}
+
+func (l *Library) ScanDirectory(root string, onOpen func(string) error) error {
+	resolved, err := ProbeRoot(root)
+	if err != nil {
+		err = fmt.Errorf("目录无法打开: %w", err)
+		l.mu.Lock()
+		if l.state.Root == root || l.state.Updated == 0 {
+			l.state.Error = err.Error()
+		}
+		l.mu.Unlock()
+		return err
+	}
+	root = resolved
 	l.mu.Lock()
 	if l.state.Scanning {
 		l.mu.Unlock()
 		return fmt.Errorf("正在扫描，请等待完成")
 	}
+	switching := l.state.Root != root
+	if switching {
+		l.vault.token = ""
+	}
+	showProgress := len(l.vault.records) == 0
 	l.state.Scanning = true
 	l.state.Scanned = 0
 	l.state.Error = ""
@@ -125,18 +160,17 @@ func (l *Library) Scan(root string) error {
 	go func() {
 		items := make([]Item, 0, 10000)
 		byPath := map[string]int{}
-		groups := map[string]bool{}
 		folders := map[string]Item{}
-		counts := map[string]int{}
-		allCounts := map[string]int{}
-		var size int64
 		skipped := 0
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, e error) error {
 			if e != nil {
+				if path == root {
+					return e
+				}
 				skipped++
 				return nil
 			}
-			if strings.HasPrefix(d.Name(), ".") {
+			if path != root && strings.HasPrefix(d.Name(), ".") {
 				if d.IsDir() {
 					return fs.SkipDir
 				}
@@ -157,7 +191,7 @@ func (l *Library) Scan(root string) error {
 				}
 				return nil
 			}
-			if d.Type()&os.ModeSymlink != 0 {
+			if d.Type()&os.ModeSymlink != 0 || l.isMetadata(path) {
 				return nil
 			}
 			info, e := d.Info()
@@ -186,13 +220,7 @@ func (l *Library) Scan(root string) error {
 				parent = ""
 			}
 			items = append(items, Item{ID: id, Name: d.Name(), Path: path, Group: group, Folder: parent, Kind: kind(ext), Ext: ext, Size: info.Size(), Modified: info.ModTime().UnixMilli(), Thumbnail: thumb})
-			size += info.Size()
-			allCounts[kind(ext)]++
-			if !thumb {
-				counts[kind(ext)]++
-			}
-			groups[group] = true
-			if len(items)%1000 == 0 {
+			if showProgress && len(items)%1000 == 0 {
 				l.mu.Lock()
 				l.state.Scanned = len(items)
 				l.mu.Unlock()
@@ -218,47 +246,76 @@ func (l *Library) Scan(root string) error {
 		for i, x := range items {
 			ids[x.ID] = i
 		}
-		gs := make([]string, 0, len(groups))
-		for g := range groups {
-			gs = append(gs, g)
-		}
-		sort.Strings(gs)
-		index := buildIndex(items)
 		l.mu.Lock()
 		defer l.mu.Unlock()
-		l.index = index
-		l.resetCache()
-		l.items = items
-		l.folders = folders
-		l.ids = ids
-		l.state = Status{Root: root, Total: len(items), Scanned: len(items), Bytes: size, Counts: counts, Groups: gs, Skipped: skipped, Updated: time.Now().UnixMilli()}
-		l.state.DetectedMode, l.state.DetectionReason = detectSource(root, folders, items)
-		l.state.FolderCount = len(folders)
-		l.state.AllCounts = allCounts
-		if err != nil {
-			l.state.Error = err.Error()
+		if err == nil && onOpen != nil {
+			err = onOpen(root)
 		}
+		if err != nil {
+			l.state.Scanning = false
+			l.state.Scanned = l.state.Total
+			l.state.Error = err.Error()
+			return
+		}
+		l.items, l.folders, l.ids = items, folders, ids
+		l.state = Status{Root: root, Skipped: skipped, Updated: max(l.state.Updated+1, time.Now().UnixMilli())}
+		l.reindex()
+		l.state.DetectedMode, l.state.DetectionReason = detectSource(root, folders, items)
 	}()
 	return nil
 }
-func (l *Library) Status() Status { l.mu.RLock(); defer l.mu.RUnlock(); return l.state }
+
+func (l *Library) isMetadata(path string) bool {
+	if filepath.Dir(path) != l.dataDir {
+		return false
+	}
+	switch strings.TrimSuffix(filepath.Base(path), ".tmp") {
+	case "vault.json", "settings.json", "source.txt", "marks.json":
+		return true
+	}
+	return false
+}
+
+func sortedGroups(groups map[string]bool) []string {
+	result := make([]string, 0, len(groups))
+	for group := range groups {
+		result = append(result, group)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func (l *Library) Status(tokens ...string) Status {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	st := l.state
+	_, st.VaultConfigured = l.vault.records[st.Root]
+	st.VaultUnlocked = len(tokens) > 0 && l.vaultAuthorized(tokens[0])
+	return st
+}
 
 type Query struct {
 	Search, Kind, Group, Sort string
 	Names                     map[string]string
 	Thumbs, Star              bool
 	Offset, Limit             int
+	Private                   bool
+	VaultToken                string
 }
 type Result struct {
-	Items     []Item `json:"items"`
-	Total     int    `json:"total"`
-	Bytes     int64  `json:"bytes"`
-	FileCount int    `json:"fileCount"`
+	Items              []Item `json:"items"`
+	Total              int    `json:"total"`
+	Bytes              int64  `json:"bytes"`
+	FileCount          int    `json:"fileCount"`
+	FolderPrivateEntry bool   `json:"folderPrivateEntry,omitempty"`
 }
 
 func (l *Library) List(q Query) Result {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+	if q.Private && !l.vaultAuthorized(q.VaultToken) {
+		return Result{Items: []Item{}}
+	}
 	matches := l.query(q)
 	r := Result{Items: []Item{}, Total: len(matches.indices), FileCount: len(matches.indices), Bytes: matches.bytes}
 	if q.Limit <= 0 || q.Limit > 200 {
@@ -276,15 +333,19 @@ func (l *Library) List(q Query) Result {
 		m := l.marks[x.ID]
 		x.Star = m.Star
 		x.Tags = m.Tags
-		r.Items = append(r.Items, x)
+		r.Items = append(r.Items, l.itemForView(x, q.Private))
 	}
 	return r
 }
-func (l *Library) Item(id string) (Item, error) {
+func (l *Library) Item(id string, tokens ...string) (Item, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+	return l.item(id, tokens)
+}
+
+func (l *Library) item(id string, tokens []string) (Item, error) {
 	i, ok := l.ids[id]
-	if !ok {
+	if !ok || !l.canRead(id, tokens) {
 		return Item{}, os.ErrNotExist
 	}
 	x := l.items[i]
@@ -293,8 +354,10 @@ func (l *Library) Item(id string) (Item, error) {
 	x.Tags = m.Tags
 	return x, nil
 }
-func (l *Library) Open(id string) (*os.File, Item, error) {
-	x, e := l.Item(id)
+func (l *Library) Open(id string, tokens ...string) (*os.File, Item, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	x, e := l.item(id, tokens)
 	if e != nil {
 		return nil, x, e
 	}
@@ -308,10 +371,10 @@ func (l *Library) Open(id string) (*os.File, Item, error) {
 	f, e := os.Open(p)
 	return f, x, e
 }
-func (l *Library) Mark(id string, m Mark) error {
+func (l *Library) Mark(id string, m Mark, tokens ...string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if _, ok := l.ids[id]; !ok {
+	if _, ok := l.ids[id]; !ok || !l.canRead(id, tokens) {
 		return os.ErrNotExist
 	}
 	if len(m.Tags) > 1000 {
@@ -337,13 +400,13 @@ func (l *Library) Mark(id string, m Mark) error {
 	l.resetCache()
 	return nil
 }
-func (l *Library) Export(ids []string, dest string) (int, error) {
+func (l *Library) Export(ids []string, dest string, tokens ...string) (int, error) {
 	if len(ids) == 0 || len(ids) > 200 {
 		return 0, fmt.Errorf("每次请选择 1–200 个资源")
 	}
 	n := 0
 	for _, id := range ids {
-		f, x, e := l.Open(id)
+		f, x, e := l.Open(id, tokens...)
 		if e != nil {
 			return n, e
 		}
@@ -434,7 +497,7 @@ func (l *Library) Scopes(q Query) Scopes {
 		}
 		for _, i := range candidates {
 			x := l.items[i]
-			if !matches(x, l.marks[x.ID], q, kinds, search) {
+			if !l.visible(x.ID, false) || !matches(x, l.marks[x.ID], q, kinds, search) {
 				continue
 			}
 			g := m[x.Group]
@@ -442,7 +505,7 @@ func (l *Library) Scopes(q Query) Scopes {
 				g = &Scope{Hash: x.Group, Counts: map[string]int{}, Covers: []ScopeCover{}}
 				m[x.Group] = g
 			}
-			addScope(g, x)
+			addScope(g, l.itemForView(x, false))
 			r.Resources++
 			r.Bytes += x.Size
 		}
