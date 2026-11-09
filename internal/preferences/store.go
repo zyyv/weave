@@ -31,13 +31,16 @@ type Contact struct {
 
 // Source choices belong to a resource root, independently of app appearance.
 type Source struct {
-	Mode    string `json:"mode"`
-	Grouped bool   `json:"grouped"`
+	Mode     string `json:"mode"`
+	Grouped  bool   `json:"grouped"`
+	Timeline bool   `json:"timeline,omitempty"`
 }
 type disk struct {
-	Preferences Preferences                   `json:"preferences"`
-	Bindings    map[string]map[string]Contact `json:"bindings"`
-	Sources     map[string]Source             `json:"sources"`
+	LastDirectory string                        `json:"lastDirectory,omitempty"`
+	Directories   []Directory                   `json:"directories,omitempty"`
+	Preferences   Preferences                   `json:"preferences"`
+	Bindings      map[string]map[string]Contact `json:"bindings"`
+	Sources       map[string]Source             `json:"sources"`
 }
 type Store struct {
 	mu   sync.Mutex
@@ -85,6 +88,9 @@ func (s *Store) SetSource(root string, source Source) error {
 	defer s.mu.Unlock()
 	if root == "" || (source.Mode != "auto" && source.Mode != "folder" && source.Mode != "wechat") {
 		return fmt.Errorf("无效的目录模式")
+	}
+	if source.Timeline {
+		source.Grouped = false
 	}
 	next := map[string]Source{}
 	for k, v := range s.data.Sources {

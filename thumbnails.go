@@ -36,15 +36,19 @@ func (t *thumbnailCache) get(key string) []byte {
 	return t.values[key]
 }
 func (t *thumbnailCache) serve(w http.ResponseWriter, r *http.Request, lib *library.Library, id string) {
-	x, err := lib.Item(id)
+	x, err := lib.Item(id, vaultCookie(r))
 	if err != nil || x.Kind != "image" {
 		http.NotFound(w, r)
 		return
 	}
 	key := thumbnailKey(x)
 	send := func(data []byte) {
+		if _, err := lib.Item(id, vaultCookie(r)); err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "image/png")
-		w.Header().Set("Cache-Control", "private, max-age=3600")
+		w.Header().Set("Cache-Control", "no-store")
 		w.Write(data)
 	}
 	if data := t.get(key); data != nil {
@@ -65,7 +69,7 @@ func (t *thumbnailCache) serve(w http.ResponseWriter, r *http.Request, lib *libr
 		return
 	}
 	// Open through the library to validate the resource before passing its path to sips.
-	f, _, err := lib.Open(id)
+	f, _, err := lib.Open(id, vaultCookie(r))
 	if err != nil {
 		http.NotFound(w, r)
 		return

@@ -40,7 +40,7 @@ func histogramForImage(src image.Image) imageHistogram {
 	return result
 }
 func (t *thumbnailCache) serveHistogram(w http.ResponseWriter, r *http.Request, lib *library.Library, id string) {
-	item, err := lib.Item(id)
+	item, err := lib.Item(id, vaultCookie(r))
 	if err != nil || item.Kind != "image" {
 		http.NotFound(w, r)
 		return
@@ -57,7 +57,7 @@ func (t *thumbnailCache) serveHistogram(w http.ResponseWriter, r *http.Request, 
 	if data := t.get(thumbnailKey(item)); data != nil {
 		src, _, err = image.Decode(bytes.NewReader(data))
 	} else {
-		f, _, openErr := lib.Open(id)
+		f, _, openErr := lib.Open(id, vaultCookie(r))
 		if openErr != nil {
 			http.NotFound(w, r)
 			return
@@ -70,6 +70,10 @@ func (t *thumbnailCache) serveHistogram(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	if ctx.Err() != nil {
+		return
+	}
+	if _, err := lib.Item(id, vaultCookie(r)); err != nil {
+		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

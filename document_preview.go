@@ -16,7 +16,7 @@ func serveDocument(w http.ResponseWriter, r *http.Request, lib *library.Library,
 		http.Error(w, "method", http.StatusMethodNotAllowed)
 		return
 	}
-	f, item, err := lib.Open(id)
+	f, item, err := lib.Open(id, vaultCookie(r))
 	if err != nil {
 		http.NotFound(w, r)
 		return

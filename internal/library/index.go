@@ -23,7 +23,7 @@ type queryCache struct {
 	keys   []string
 }
 
-func buildIndex(items []Item) *catalogIndex {
+func buildIndex(items []Item, protected ...map[string]string) *catalogIndex {
 	idx := &catalogIndex{orders: map[string][]int{}, groups: map[string]map[string][]int{}, summaries: map[bool]map[string]map[string]Scope{false: {}, true: {}}}
 	date := make([]int, len(items))
 	for i := range items {
@@ -51,6 +51,17 @@ func buildIndex(items []Item) *catalogIndex {
 		}
 	}
 	for _, x := range items {
+		if len(protected) > 0 {
+			if protected[0][x.ID] != "" {
+				continue
+			}
+			if protected[0][x.Preview] != "" {
+				x.Preview = ""
+				if x.Kind == "image" {
+					x.Preview = x.ID
+				}
+			}
+		}
 		for _, thumbs := range []bool{false, true} {
 			if !thumbs && x.Thumbnail {
 				continue
@@ -128,9 +139,9 @@ func (l *Library) query(q Query) queryResult {
 	}
 	keyBytes, _ := json.Marshal(struct {
 		Search, Kind, Group, Sort string
-		Thumbs, Star              bool
+		Thumbs, Star, Private     bool
 		Names                     map[string]string
-	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Thumbs, q.Star, names})
+	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Thumbs, q.Star, q.Private, names})
 	key := string(keyBytes)
 	l.cache.mu.Lock()
 	cached, ok := l.cache.values[key]
@@ -142,7 +153,7 @@ func (l *Library) query(q Query) queryResult {
 	r := queryResult{indices: []int{}}
 	for _, i := range l.candidates(q) {
 		x := l.items[i]
-		if matches(x, l.marks[x.ID], q, kinds, search) {
+		if l.visible(x.ID, q.Private) && matches(x, l.marks[x.ID], q, kinds, search) {
 			r.indices = append(r.indices, i)
 			r.bytes += x.Size
 		}

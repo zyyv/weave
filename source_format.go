@@ -57,7 +57,9 @@ func serveSourceFormat(w http.ResponseWriter, r *http.Request, lib *library.Libr
 		http.Error(w, "method", http.StatusMethodNotAllowed)
 		return
 	}
-	item, err := lib.Item(r.URL.Query().Get("id"))
+	id := r.URL.Query().Get("id")
+	token := vaultCookie(r)
+	item, err := lib.Item(id, token)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -97,6 +99,10 @@ func serveSourceFormat(w http.ResponseWriter, r *http.Request, lib *library.Libr
 		default:
 			http.Error(w, "formatter", http.StatusInternalServerError)
 		}
+		return
+	}
+	if _, err := lib.Item(id, token); err != nil {
+		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
