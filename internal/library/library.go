@@ -37,22 +37,28 @@ type Mark struct {
 	Tags string `json:"tags"`
 }
 type Status struct {
-	VaultConfigured bool           `json:"vaultConfigured"`
-	VaultUnlocked   bool           `json:"vaultUnlocked"`
-	Root            string         `json:"root"`
-	Scanning        bool           `json:"scanning"`
-	Scanned         int            `json:"scanned"`
-	Total           int            `json:"total"`
-	Bytes           int64          `json:"bytes"`
-	Counts          map[string]int `json:"counts"`
-	AllCounts       map[string]int `json:"allCounts"`
-	Groups          []string       `json:"groups"`
-	Error           string         `json:"error"`
-	Skipped         int            `json:"skipped"`
-	Updated         int64          `json:"updated"`
-	DetectedMode    string         `json:"detectedMode"`
-	DetectionReason string         `json:"detectionReason"`
-	FolderCount     int            `json:"folderCount"`
+	VaultConfigured  bool             `json:"vaultConfigured"`
+	VaultUnlocked    bool             `json:"vaultUnlocked"`
+	Root             string           `json:"root"`
+	Scanning         bool             `json:"scanning"`
+	Scanned          int              `json:"scanned"`
+	Total            int              `json:"total"`
+	Bytes            int64            `json:"bytes"`
+	Counts           map[string]int   `json:"counts"`
+	AllCounts        map[string]int   `json:"allCounts"`
+	KindBytes        map[string]int64 `json:"kindBytes"`
+	AllKindBytes     map[string]int64 `json:"allKindBytes"`
+	FavoriteCount    int              `json:"favoriteCount"`
+	FavoriteBytes    int64            `json:"favoriteBytes"`
+	AllFavoriteCount int              `json:"allFavoriteCount"`
+	AllFavoriteBytes int64            `json:"allFavoriteBytes"`
+	Groups           []string         `json:"groups"`
+	Error            string           `json:"error"`
+	Skipped          int              `json:"skipped"`
+	Updated          int64            `json:"updated"`
+	DetectedMode     string           `json:"detectedMode"`
+	DetectionReason  string           `json:"detectionReason"`
+	FolderCount      int              `json:"folderCount"`
 }
 type Library struct {
 	mu        sync.RWMutex
@@ -85,7 +91,7 @@ func New(root, data string) (*Library, error) {
 	if err := l.loadVault(data); err != nil {
 		return nil, err
 	}
-	l.state = Status{Root: root, Counts: map[string]int{}, Groups: []string{}}
+	l.state = Status{Root: root, Counts: map[string]int{}, AllCounts: map[string]int{}, KindBytes: map[string]int64{}, AllKindBytes: map[string]int64{}, Groups: []string{}}
 	return l, nil
 }
 func IsTextExtension(ext string) bool {
@@ -388,7 +394,8 @@ func (l *Library) Open(id string, tokens ...string) (*os.File, Item, error) {
 func (l *Library) Mark(id string, m Mark, tokens ...string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if _, ok := l.ids[id]; !ok || !l.canRead(id, tokens) {
+	i, ok := l.ids[id]
+	if !ok || !l.canRead(id, tokens) {
 		return os.ErrNotExist
 	}
 	if len(m.Tags) > 1000 {
@@ -409,6 +416,20 @@ func (l *Library) Mark(id string, m Mark, tokens ...string) error {
 	}
 	if e = os.Rename(tmp, l.stateFile); e != nil {
 		return e
+	}
+	previous := l.marks[id]
+	item := l.items[i]
+	if previous.Star != m.Star && l.vault.items[id] == "" {
+		delta := int64(-1)
+		if m.Star {
+			delta = 1
+		}
+		l.state.AllFavoriteCount += int(delta)
+		l.state.AllFavoriteBytes += delta * item.Size
+		if !item.Thumbnail {
+			l.state.FavoriteCount += int(delta)
+			l.state.FavoriteBytes += delta * item.Size
+		}
 	}
 	l.marks = next
 	l.resetCache()

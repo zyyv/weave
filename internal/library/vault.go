@@ -242,6 +242,9 @@ func (l *Library) reindex() {
 	st := &l.state
 	st.Total, st.Scanned, st.Bytes, st.FolderCount = 0, 0, 0, 0
 	st.Counts, st.AllCounts = map[string]int{}, map[string]int{}
+	st.KindBytes, st.AllKindBytes = map[string]int64{}, map[string]int64{}
+	st.FavoriteCount, st.FavoriteBytes = 0, 0
+	st.AllFavoriteCount, st.AllFavoriteBytes = 0, 0
 	groups := map[string]bool{}
 	for _, x := range l.items {
 		if owner := v.items[x.ID]; owner != "" {
@@ -253,8 +256,18 @@ func (l *Library) reindex() {
 		st.Total++
 		st.Bytes += x.Size
 		st.AllCounts[x.Kind]++
+		st.AllKindBytes[x.Kind] += x.Size
+		if l.marks[x.ID].Star {
+			st.AllFavoriteCount++
+			st.AllFavoriteBytes += x.Size
+		}
 		if !x.Thumbnail {
 			st.Counts[x.Kind]++
+			st.KindBytes[x.Kind] += x.Size
+			if l.marks[x.ID].Star {
+				st.FavoriteCount++
+				st.FavoriteBytes += x.Size
+			}
 		}
 		groups[x.Group] = true
 	}

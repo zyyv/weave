@@ -2,7 +2,7 @@ import {t} from './i18n.js';
 export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContacts,getSource,isWechat,sourceBusy,changeSource,groupingMode,groupingOptions,changeGrouping,setPref,onContacts,choose,rescan,openDirectories,directoryName,onNavigate,startTour,getDevelopment=()=>false,replayTour}){
  let section='general',bindingHash='',rootDraft='',draftRoot,committingRoot=false;
  const intro=(h,p)=>`<div class="settings-intro"><h2>${h}</h2><p>${p}</p></div>`;
- const toggle=(key,title,desc)=>`<div class="setting-row"><div><strong>${title}</strong><small>${desc}</small></div><button class="switch" role="switch" aria-label="${title}" aria-checked="${!!getPrefs()[key]}" data-toggle="${key}"></button></div>`;
+ const toggle=(key,title,desc)=>`<div class="setting-row"><div><strong>${title}</strong><small>${desc}</small></div><button type="button" class="switch" role="switch" aria-label="${title}" aria-checked="${!!getPrefs()[key]}" data-toggle="${key}"></button></div>`;
  const select=(key,title,desc,options)=>`<div class="setting-row"><div><strong>${title}</strong><small>${desc}</small></div><select data-pref="${key}" aria-label="${title}">${options.map(([v,n])=>`<option value="${v}" ${String(getPrefs()[key])===String(v)?'selected':''}>${n}</option>`).join('')}</select></div>`;
  const groupingControl=st=>`<div class="setting-row"><div><strong>${t('resourceGrouping')}</strong><small>${t('sourceBrowseDescription')}</small></div><select id="settingsGrouping" aria-label="${t('resourceGrouping')}" ${!st.root||st.scanning||sourceBusy()?'disabled':''}>${groupingOptions().map(([v,n])=>`<option value="${v}" ${groupingMode()===v?'selected':''}>${n}</option>`).join('')}</select></div>`;
  const bindOptions=()=>getState().groups?.filter(g=>g!=='未分组').map(g=>`<option value="${esc(g)}">${esc(getContacts()[g]?.name||t('unboundConversation'))} · ${esc(g.slice(0,12))}</option>`).join('')||'';
@@ -22,13 +22,19 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
  root.querySelectorAll('[data-kind-color]').forEach(e=>e.style.setProperty('--kind-color',`var(--${e.dataset.kindColor})`));root.querySelectorAll('[data-swatch]').forEach(e=>e.style.background=e.dataset.swatch);
  if($('#sourceMode'))$('#sourceMode').onchange=e=>changeSource({mode:e.target.value});
  if($('#settingsGrouping'))$('#settingsGrouping').onchange=e=>changeGrouping(e.target.value);
- root.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{setPref(b.dataset.toggle,!getPrefs()[b.dataset.toggle]);render()});root.querySelectorAll('[data-pref]').forEach(e=>e.onchange=()=>setPref(e.dataset.pref,['speed','volume'].includes(e.dataset.pref)?Number(e.value):e.value));root.querySelectorAll('[data-theme-choice]').forEach(b=>b.onclick=()=>{setPref('theme',b.dataset.themeChoice);render()});root.querySelectorAll('[data-palette]').forEach(b=>b.onclick=()=>{setPref('palette',b.dataset.palette);render()});
+ root.querySelectorAll('[data-toggle]').forEach(button=>button.onclick=()=>{
+  const key=button.dataset.toggle;
+  const checked=!getPrefs()[key];
+  button.setAttribute('aria-checked',String(checked));
+  setPref(key,checked);
+ });
+ root.querySelectorAll('[data-pref]').forEach(e=>e.onchange=()=>setPref(e.dataset.pref,['speed','volume'].includes(e.dataset.pref)?Number(e.value):e.value));root.querySelectorAll('[data-theme-choice]').forEach(b=>b.onclick=()=>{setPref('theme',b.dataset.themeChoice);render()});root.querySelectorAll('[data-palette]').forEach(b=>b.onclick=()=>{setPref('palette',b.dataset.palette);render()});
  if(section==='playback')$('#defaultVolume').oninput=e=>{$('#volumeLabel').textContent=Math.round(e.target.value*100)+'%';setPref('volume',Number(e.target.value))};
  if(section==='bindings'){
   const hash=$('#bindingHash');if(st.groups?.includes(bindingHash))hash.value=bindingHash;const fill=()=>{bindingHash=hash.value;const c=getContacts()[bindingHash];$('#bindingName').value=c?.name||'';$('#bindingUsername').value=c?.username||'';$('#bindingType').value=c?.type||'person';$('#removeBinding').disabled=!c;$('#saveBinding').disabled=!bindingHash};hash.onchange=fill;fill();
-  $('#saveBinding').onclick=async()=>{const name=$('#bindingName').value.trim();if(!name){toast(t('enterAConversationName'));return}await bind({[hash.value]:{name,username:$('#bindingUsername').value.trim(),type:$('#bindingType').value}})};
+  $('#saveBinding').onclick=async()=>{const name=$('#bindingName').value.trim();if(!name){toast(t('enterAConversationName'),'error');return}await bind({[hash.value]:{name,username:$('#bindingUsername').value.trim(),type:$('#bindingType').value}})};
   $('#removeBinding').onclick=()=>bind({[hash.value]:{name:'',username:'',type:'custom'}});
-  root.querySelectorAll('[data-edit-binding]').forEach(b=>b.onclick=()=>{bindingHash=b.dataset.editBinding;render();$('#bindingName').focus()});$('#importBindings').onclick=()=>$('#mappingFile').click();$('#mappingFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>2*1024*1024)throw Error(t('mappingFileExceedsMib'));const raw=JSON.parse(await f.text());const m=Array.isArray(raw)?Object.fromEntries(raw.map(v=>[v.hash,{name:v.name,username:v.username||'',type:v.type||'person'}])):raw;if(!m||typeof m!=='object')throw Error(t('invalidMappingFile'));for(const [k,v]of Object.entries(m)){if(!v||typeof v.name!=='string'||!k)throw Error(t('mappingsMustIncludeAFolderHashAndName'));v.type||='person';v.username||=''}await bind(m)}catch(err){toast(t('importFailed')+err.message)}};
+  root.querySelectorAll('[data-edit-binding]').forEach(b=>b.onclick=()=>{bindingHash=b.dataset.editBinding;render();$('#bindingName').focus()});$('#importBindings').onclick=()=>$('#mappingFile').click();$('#mappingFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>2*1024*1024)throw Error(t('mappingFileExceedsMib'));const raw=JSON.parse(await f.text());const m=Array.isArray(raw)?Object.fromEntries(raw.map(v=>[v.hash,{name:v.name,username:v.username||'',type:v.type||'person'}])):raw;if(!m||typeof m!=='object')throw Error(t('invalidMappingFile'));for(const [k,v]of Object.entries(m)){if(!v||typeof v.name!=='string'||!k)throw Error(t('mappingsMustIncludeAFolderHashAndName'));v.type||='person';v.username||=''}await bind(m)}catch(err){toast(t('importFailed')+err.message,'error')}};
  }
  if(section==='data'){
  const input=$('#resourceFolderInput');
@@ -38,7 +44,7 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
  $('#settingsDirectories').onclick=openDirectories;
  $('#settingsChoose').onclick=()=>commitRoot();$('#settingsScan').onclick=rescan;if($('#settingsTour'))$('#settingsTour').onclick=startTour;if($('#settingsDevTour'))$('#settingsDevTour').onclick=replayTour}
  }
- async function bind(m){try{const snapshot=await api('bindings',m);onContacts(snapshot.contacts);toast(t('conversationBindingsSaved'));render()}catch(e){toast(e.message)}}
+ async function bind(m){try{const snapshot=await api('bindings',m);onContacts(snapshot.contacts);toast(t('conversationBindingsSaved'),'success');render()}catch(e){toast(e.message,'error')}}
  $('#settingsNav').querySelectorAll('button').forEach(b=>b.onclick=()=>onNavigate(()=>{section=b.dataset.section;render()}));
  return{render,location:()=>({tab:section,hash:bindingHash}),open:(tab='general',hash='')=>{section=tab;bindingHash=hash;render()}};
 }

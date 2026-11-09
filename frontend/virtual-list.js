@@ -23,9 +23,10 @@ export class VirtualList {
   this.sticky.hidden=true;
   this.rebuild();this.draw();
  }
- itemKey(item){return `${this.root.clientWidth}:${this.options.compact}:${this.options.scopes}:${item.hash||item.id}`}
+ itemKey(item){return `${this.width}:${this.options.compact}:${this.options.scopes}:${item.hash||item.id}`}
  rebuild(){
   if(!this.options)return;const {scopes,list,compact,group}=this.options,width=this.root.clientWidth;
+  this.width=width;
   this.columns=list?1:Math.max(1,Math.floor((width+16)/((scopes?270:compact?130:158)+16)));this.gap=list?0:16;this.height=scopes?(compact?200:228):list?88:compact?175:210;
   this.rows=[];this.groups=[];
   let top=0,bucket=[],dayKey;
@@ -62,7 +63,7 @@ export class VirtualList {
   this.sticky.hidden=false;
  }
  draw(){
-  if(!this.options||!this.scroller.clientHeight)return;
+  if(!this.options||this.root.hidden||!this.scroller.clientHeight)return;
   const viewportTop=this.scroller.getBoundingClientRect().top+this.scroller.clientTop-this.root.getBoundingClientRect().top;
   const top=Math.max(0,viewportTop),bottom=top+this.scroller.clientHeight;
   this.drawSticky(viewportTop);
