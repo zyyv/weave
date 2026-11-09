@@ -15,7 +15,7 @@ const names = {
   star: 'star', lock: 'square-lock-01', refresh: 'refresh', export: 'upload-01',
   import: 'download-01', search: 'search-01', list: 'left-to-right-list-bullet',
   close: 'cancel-01', tag: 'tag-01', settings: 'settings-01', layers: 'layers-01',
-  edit: 'pencil-edit-02', users: 'user-group', play: 'play', pause: 'pause',
+  edit: 'pencil-edit-02', trash: 'delete-02', users: 'user-group', play: 'play', pause: 'pause',
   rewind: 'go-backward-10-sec', volumeHigh: 'volume-high', volumeLow: 'volume-low',
   volumeOff: 'volume-off', fullscreenEnter: 'full-screen', fullscreenExit: 'shrink',
   pipEnter: 'picture-in-picture-on', pipExit: 'picture-in-picture-exit',

@@ -49,7 +49,7 @@ func (s *Store) OpenDirectory(root string) error {
 	return s.save(d)
 }
 
-func (s *Store) NameDirectory(root, name string) error {
+func (s *Store) EditDirectory(root, path, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	name = strings.TrimSpace(name)
@@ -60,8 +60,29 @@ func (s *Store) NameDirectory(root, name string) error {
 	if i < 0 || !filepath.IsAbs(root) {
 		return errors.New("找不到这条目录记录")
 	}
+	if !filepath.IsAbs(path) || strings.ContainsRune(path, 0) {
+		return errors.New("请输入绝对目录路径")
+	}
+	path = filepath.Clean(path)
+	if path != root && slices.ContainsFunc(s.data.Directories, func(dir Directory) bool { return dir.Path == path }) {
+		return errors.New("此路径已在资源目录历史中")
+	}
 	d := s.data
 	d.Directories = slices.Clone(d.Directories)
+	d.Directories[i].Path = path
 	d.Directories[i].Name = name
+	return s.save(d)
+}
+
+// RemoveDirectory forgets a history entry without changing the active library.
+func (s *Store) RemoveDirectory(root string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.data.Directories, func(dir Directory) bool { return dir.Path == root })
+	if i < 0 {
+		return nil
+	}
+	d := s.data
+	d.Directories = slices.Delete(slices.Clone(d.Directories), i, i+1)
 	return s.save(d)
 }

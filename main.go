@@ -77,7 +77,11 @@ func main() {
 	}
 	message := func(key string) string { return localizedMessage(prefs.Get(lib.Status().Root).Preferences.Locale, key) }
 	if *root != "" {
-		if e = lib.ScanDirectory(*root, prefs.OpenDirectory); e != nil {
+		var remember func(string) error
+		if rootExplicit {
+			remember = prefs.OpenDirectory
+		}
+		if e = lib.ScanDirectory(*root, remember); e != nil {
 			log.Print(e)
 		}
 	}
@@ -161,13 +165,30 @@ func main() {
 					LastRoot string  `json:"lastRoot"`
 					Entries  []entry `json:"entries"`
 				}{last, entries})
-			case "directory-name":
-				var in struct{ Root, Name string }
+			case "directory-edit":
+				var in struct{ Root, Path, Name string }
 				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
 					fail(e)
 					return
 				}
-				if e := prefs.NameDirectory(in.Root, in.Name); e != nil {
+				path := strings.TrimSpace(in.Path)
+				if filepath.IsAbs(path) && path != in.Root {
+					if resolved, e := library.ProbeRoot(path); e == nil {
+						path = resolved
+					}
+				}
+				if e := prefs.EditDirectory(in.Root, path, in.Name); e != nil {
+					fail(e)
+					return
+				}
+				jsonOut(true)
+			case "directory-remove":
+				var in struct{ Root string }
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				if e := prefs.RemoveDirectory(in.Root); e != nil {
 					fail(e)
 					return
 				}

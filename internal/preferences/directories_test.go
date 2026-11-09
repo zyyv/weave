@@ -20,7 +20,7 @@ func TestDirectoryHistoryPreservesAliasesAndLastRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 		if root == first {
-			if err := s.NameDirectory(root, "  Archive  "); err != nil {
+			if err := s.EditDirectory(root, root, "  Archive  "); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -32,5 +32,39 @@ func TestDirectoryHistoryPreservesAliasesAndLastRoot(t *testing.T) {
 	last, dirs := s.Directories()
 	if last != first || len(dirs) != 2 || dirs[0].Path != first || dirs[0].Name != "Archive" || dirs[0].LastOpened == 0 || dirs[1].Path != second {
 		t.Fatalf("unexpected directory history: %q %+v", last, dirs)
+	}
+}
+
+func TestDirectoryHistoryEditsLeaveCurrentRootUnchanged(t *testing.T) {
+	data := t.TempDir()
+	s, err := New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := filepath.Join(data, "current")
+	other := filepath.Join(data, "other")
+	offline := filepath.Join(data, "offline")
+	for _, path := range []string{other, current} {
+		if err := s.OpenDirectory(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, before := s.Directories()
+	if err := s.EditDirectory(current, other, "Duplicate"); err == nil {
+		t.Fatal("accepted a duplicate path")
+	}
+	if err := s.EditDirectory(current, offline, "Offline archive"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveDirectory(other); err != nil {
+		t.Fatal(err)
+	}
+	s, err = New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last, history := s.Directories()
+	if last != current || len(history) != 1 || history[0] != (Directory{Path: offline, Name: "Offline archive", LastOpened: before[0].LastOpened}) {
+		t.Fatalf("unexpected current root or history: %q %+v", last, history)
 	}
 }
