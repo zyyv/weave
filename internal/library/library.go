@@ -79,7 +79,21 @@ func New(root, data string) (*Library, error) {
 	l.state = Status{Root: root, Counts: map[string]int{}, Groups: []string{}}
 	return l, nil
 }
+func IsTextExtension(ext string) bool {
+	switch ext {
+	case ".txt", ".md", ".markdown", ".csv", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx",
+		".html", ".htm", ".css", ".scss", ".less", ".json", ".jsonc", ".json5", ".yaml", ".yml",
+		".toml", ".graphql", ".gql", ".vue", ".mdx", ".xml", ".svg":
+		return true
+	default:
+		return false
+	}
+}
+
 func kind(ext string) string {
+	if IsTextExtension(ext) {
+		return "document"
+	}
 	switch ext {
 	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".pic", ".record_thumb":
 		return "image"
@@ -87,7 +101,7 @@ func kind(ext string) string {
 		return "video"
 	case ".silk", ".amr", ".mp3", ".wav", ".m4a", ".ogg":
 		return "audio"
-	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv":
+	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx":
 		return "document"
 	default:
 		return "other"

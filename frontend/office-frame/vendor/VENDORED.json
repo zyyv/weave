@@ -1,0 +1,10 @@
+{
+  "source": "https://github.com/flyfish-dev/file-viewer",
+  "buildDependencies": {
+    "@file-viewer/renderer-word": "3.3.3",
+    "@file-viewer/renderer-spreadsheet": "3.3.3",
+    "@file-viewer/renderer-presentation": "3.3.3",
+    "esbuild": "0.28.2",
+    "prismjs": "1.30.0"
+  }
+}

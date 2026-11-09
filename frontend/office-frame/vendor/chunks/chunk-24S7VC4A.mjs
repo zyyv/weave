@@ -1,0 +1,1 @@
+function c(i){return Number.isFinite(i)&&i>0}function h(i,n,t){return Math.min(t,Math.max(n,i))}function l(i,n){var t,e;let o=(t=n.viewportWidth)!==null&&t!==void 0?t:i.clientWidth,r=(e=n.viewportHeight)!==null&&e!==void 0?e:i.clientHeight;return[o,r,i.clientWidth,i.clientHeight].every(c)?{width:o,height:r}:null}export{c as a,h as b,l as c};

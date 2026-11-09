@@ -85,6 +85,18 @@ func main() {
 		}
 		web = os.DirFS(*frontendPath)
 	}
+	officeListener, e := net.Listen("tcp", "127.0.0.1:0")
+	if e != nil {
+		log.Fatal(e)
+	}
+	officeOrigin := "http://" + officeListener.Addr().String()
+	officeServer := officePreviewServer(officeListener, web, origin)
+	go func() {
+		if e := officeServer.Serve(officeListener); e != nil && e != http.ErrServerClosed {
+			log.Print(e)
+		}
+	}()
+	defer officeServer.Close()
 	files := http.FileServer(http.FS(web))
 	thumbnails := newThumbnailCache()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -377,25 +389,56 @@ func main() {
 			http.ServeContent(w, r, x.Name, time.UnixMilli(x.Modified), f)
 			return
 		}
+		if path == "office-viewer" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			io.WriteString(w, officeOrigin)
+			return
+		}
+		if strings.HasPrefix(path, "office-frame/") {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.HasPrefix(path, "document/") {
+			serveDocument(w, r, lib, strings.TrimPrefix(path, "document/"), message)
+			return
+		}
+		if path == "format" {
+			serveSourceFormat(w, r, lib)
+			return
+		}
 		if path == "text" {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Allow", "GET")
+				http.Error(w, "method", http.StatusMethodNotAllowed)
+				return
+			}
 			f, x, e := lib.Open(r.URL.Query().Get("id"))
 			if e != nil {
 				fail(e)
 				return
 			}
 			defer f.Close()
-			if x.Ext != ".txt" && x.Ext != ".md" && x.Ext != ".csv" {
+			if !library.IsTextExtension(x.Ext) {
 				fail(fmt.Errorf("%s", message("errors.textFormat")))
 				return
 			}
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			io.Copy(w, io.LimitReader(f, 128*1024))
+			if info, err := f.Stat(); err == nil && info.Size() > textPreviewLimit {
+				w.Header().Set("X-Weave-Preview-Truncated", "1")
+			}
+			if canFormatSource(x.Ext) {
+				w.Header().Set("X-Weave-Can-Format", "1")
+			}
+			io.Copy(w, io.LimitReader(f, textPreviewLimit))
 			return
 		}
 		// Hashes allow only the bundled player styles, including its thumbnail shadow template.
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self' blob:; worker-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; style-src-elem 'self' 'sha256-/wNXXQM7c2ofBcjrAABoSS5Ibbo1K6dLnomtT2ZNGIA=' 'sha256-20mtW7QL/m+GnGSlicaFajrhxQFmju52t2iGt9eIJ9A=' 'sha256-wMWywP4oD7M3MPJrCTXT/qIrEodBE+KXIgZo+N4zqb8=' 'sha256-zz2BvW4NBXbVhIbcWeI/pDZ75RKV4RxP8kKCc1LmW4E=' 'sha256-PbfLgFhtMIK34HBZHnBgjlprY2JWgUyFJC2UTVSMIKQ='; script-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self' blob:; worker-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; style-src-elem 'self' 'sha256-/wNXXQM7c2ofBcjrAABoSS5Ibbo1K6dLnomtT2ZNGIA=' 'sha256-20mtW7QL/m+GnGSlicaFajrhxQFmju52t2iGt9eIJ9A=' 'sha256-wMWywP4oD7M3MPJrCTXT/qIrEodBE+KXIgZo+N4zqb8=' 'sha256-zz2BvW4NBXbVhIbcWeI/pDZ75RKV4RxP8kKCc1LmW4E=' 'sha256-PbfLgFhtMIK34HBZHnBgjlprY2JWgUyFJC2UTVSMIKQ='; script-src 'self'; object-src 'none'; frame-src "+officeOrigin+"; base-uri 'none'; frame-ancestors 'none'")
 		if path == "codec-worker.js" || path == "audio-codec-worker.js" || path == "vendor/amr-worker.js" {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'")
+		}
+		if path == "vendor/pdfjs/pdf.worker.min.mjs" {
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'")
 		}
 		r.URL.Path = "/" + path
 		files.ServeHTTP(w, r)

@@ -1,0 +1,74 @@
+{
+  "@file-viewer/core": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/doc": {
+    "version": "3.3.3",
+    "license": "MIT"
+  },
+  "@file-viewer/docx": {
+    "version": "0.3.39",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/ppt": {
+    "version": "1.0.2",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/pptx": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/renderer-ppt": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/renderer-pptx": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/renderer-presentation": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/renderer-spreadsheet": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@file-viewer/renderer-word": {
+    "version": "3.3.3",
+    "license": "Apache-2.0"
+  },
+  "@xmldom/xmldom": {
+    "version": "0.9.12",
+    "license": "MIT"
+  },
+  "dompurify": {
+    "version": "3.4.17",
+    "license": "(MPL-2.0 OR Apache-2.0)"
+  },
+  "e-virt-table": {
+    "version": "1.4.17",
+    "license": "MIT"
+  },
+  "jszip": {
+    "version": "3.10.2",
+    "license": "(MIT OR GPL-3.0-or-later)"
+  },
+  "pako": {
+    "version": "1.0.11",
+    "license": "(MIT AND Zlib)"
+  },
+  "styled-exceljs": {
+    "version": "0.21.6",
+    "license": "Apache-2.0"
+  },
+  "tinycolor2": {
+    "version": "1.6.0",
+    "license": "MIT"
+  },
+  "utif": {
+    "version": "3.1.0",
+    "license": "MIT"
+  }
+}

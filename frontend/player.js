@@ -1,3 +1,4 @@
+import {loadingMark} from './loading-state.js';
 import {t, getLocale} from './i18n.js';
 import {mountAudioPlayer} from './audio-player.js';
 import {registerVideoIcons} from './icons.js';
@@ -8,8 +9,10 @@ export function mountPlayer(root,item,prefs,onPreference){
  let disposed=false;const abort=new AbortController();
  root.innerHTML=`<div class="media-player video-shell"><media-i18n lang="${getLocale()==='zh-CN'?'zh':'en'}"><video-player><video preload="metadata" playsinline></video></video-player></media-i18n><p class="player-status" role="status">${t('preparingPlayer')}</p></div>`;
  const media=root.querySelector('video'),status=root.querySelector('.player-status');
+ const showLoading=label=>status.replaceChildren(loadingMark(),document.createTextNode(label));
+ showLoading(t('preparingPlayer'));
  media.addEventListener('loadedmetadata',()=>{if(!disposed)status.textContent=''}, {signal:abort.signal});
  media.addEventListener('error',()=>{if(!disposed){status.textContent=t('thisCodecCannotBePlayedExportTheFile');status.classList.add('error')}},{signal:abort.signal});
- loadVideo().then(()=>{if(disposed)return;registerVideoIcons();const skin=document.createElement('video-neutral-skin');media.replaceWith(skin);skin.append(media);media.volume=prefs.volume;media.playbackRate=prefs.speed;media.addEventListener('volumechange',()=>onPreference('volume',media.volume),{signal:abort.signal});media.addEventListener('ratechange',()=>onPreference('speed',media.playbackRate),{signal:abort.signal});status.textContent=t('loadingMedia');media.src='media/'+item.id}).catch(e=>{if(!disposed)status.textContent=t('couldNotLoadPlayer')+e.message});
+ loadVideo().then(()=>{if(disposed)return;registerVideoIcons();const skin=document.createElement('video-neutral-skin');media.replaceWith(skin);skin.append(media);media.volume=prefs.volume;media.playbackRate=prefs.speed;media.addEventListener('volumechange',()=>onPreference('volume',media.volume),{signal:abort.signal});media.addEventListener('ratechange',()=>onPreference('speed',media.playbackRate),{signal:abort.signal});showLoading(t('loadingMedia'));media.src='media/'+item.id}).catch(e=>{if(!disposed)status.textContent=t('couldNotLoadPlayer')+e.message});
  return()=>{disposed=true;abort.abort();media.pause();media.removeAttribute('src');media.load();root.replaceChildren()};
 }

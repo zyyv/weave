@@ -1,12 +1,13 @@
 import {t} from './i18n.js';
 import {icon} from './icons.js';
+import {previewLoading} from './loading-state.js';
 
 // All transforms affect this preview only. The source file is never written.
 export function mountImageViewer(container, item, {onLoad, onError}) {
  const shell=document.createElement('div');shell.className='image-viewer';
  const stage=document.createElement('div');stage.className='image-stage';stage.tabIndex=0;stage.setAttribute('aria-label',t('imageInteraction'));
  const img=new Image();img.alt=item.name;img.draggable=false;
- const status=document.createElement('span');status.className='image-status';status.textContent=t('loading');status.setAttribute('role','status');
+ const status=previewLoading(t('preparingImagePreview'),item.name);status.classList.add('image-status');
  const tools=document.createElement('div');tools.className='image-tools';tools.setAttribute('role','toolbar');tools.setAttribute('aria-label',t('imageInteraction'));
  let zoom=1,x=0,y=0,loaded=false,disposed=false,idleTimer,keyboard=false;const pointers=new Map();let pinch=null;
  const minus=button('zoomOut','zoomOut',()=>scale(zoom/1.25));
@@ -33,7 +34,7 @@ export function mountImageViewer(container, item, {onLoad, onError}) {
  stage.onpointerup=stage.onpointercancel=stage.onlostpointercapture=e=>{pointers.delete(e.pointerId);pinch=null};
  stage.onkeydown=e=>{if(['+','=','-','0'].includes(e.key)){e.preventDefault();if(e.key==='0')reset();else scale(e.key==='-'?zoom/1.25:zoom*1.25)}};
  img.onload=()=>{if(disposed)return;loaded=true;status.hidden=true;render();onLoad(img)};
- img.onerror=()=>{if(disposed)return;status.textContent=t('thisImageFormatCannotBePreviewedExportIt');img.hidden=true;onError?.()};
+ img.onerror=()=>{if(disposed)return;status.textContent=t('thisImageFormatCannotBePreviewedExportIt');status.classList.remove('preview-loading');img.hidden=true;onError?.()};
  img.src='media/'+item.id;
  const observer=new ResizeObserver(()=>render());observer.observe(stage);
  return ()=>{disposed=true;clearTimeout(idleTimer);observer.disconnect();img.onload=img.onerror=null;img.removeAttribute('src');pointers.clear()};

@@ -9,6 +9,7 @@ weave_bundle_version="${weave_version%%-*}"
 weave_artifact="Weave-v$weave_version-macOS-$weave_arch"
 weave_bundle="$weave_stage/image/Weave.app"
 mkdir -p "$weave_bundle/Contents/MacOS" "$weave_bundle/Contents/Resources" build
+node scripts/stage-formatter.mjs "$weave_bundle" "$weave_arch"
 CGO_ENABLED=0 go build -trimpath -tags mygo_noinspector -ldflags '-s -w' -o "$weave_bundle/Contents/MacOS/Weave" .
 cat > "$weave_bundle/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleName</key><string>Weave</string><key>CFBundleDisplayName</key><string>Weave</string><key>CFBundleIdentifier</key><string>dev.weave.resources</string><key>CFBundleVersion</key><string>$weave_bundle_version</string><key>CFBundleShortVersionString</key><string>$weave_bundle_version</string><key>CFBundleExecutable</key><string>Weave</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>12.0</string><key>NSHighResolutionCapable</key><true/><key>CFBundleIconFile</key><string>AppIcon</string></dict></plist>
@@ -16,6 +17,8 @@ PLIST
 if [[ -f assets/AppIcon.icns ]]; then cp assets/AppIcon.icns "$weave_bundle/Contents/Resources/"; fi
 # Sign outside FileProvider-managed Documents, which can reattach FinderInfo.
 xattr -cr "$weave_bundle"
+codesign --force --sign - "$weave_bundle/Contents/MacOS/formatter-node"
+find "$weave_bundle/Contents/Resources/formatter" -name '*.node' -exec codesign --force --sign - {} +
 codesign --force --deep --sign - "$weave_bundle"
 codesign --verify --deep --strict "$weave_bundle"
 # Package the clean bundle before copying it into Documents, where FileProvider

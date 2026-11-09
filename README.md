@@ -18,9 +18,10 @@ Requires macOS 12 or later. Choose a package matching your Mac: `arm64` for Appl
 
 ## Build locally
 
-On macOS, install Go (see `go.mod` for the required version), then run:
+On macOS, install Go (see `go.mod`) and Node.js 22.12 or later, then run:
 
 ```sh
+npm ci
 ./build.sh
 ```
 
@@ -28,7 +29,7 @@ The script reads the version from `package.json` and produces `build/Weave.app`,
 
 ## Development preview
 
-Run `npm run dev` for the desktop app with development tools, or `npm run dev:browser` for a browser preview that reads frontend changes on refresh.
+After `npm ci`, run `npm run dev` for the desktop app with development tools, or `npm run dev:browser` for a browser preview that reads frontend changes on refresh.
 
 The `--dev` flag enables development tools. In Settings → Data & storage, click Replay tour (dev) to preview from the first step without clearing the source folder or completion status. Click Finish preview at the last step. Development tools are off by default for normal launches and packaged apps.
 
@@ -39,7 +40,7 @@ The `--dev` flag enables development tools. In Settings → Data & storage, clic
 | Browse your library | Browse ordinary folders by their real hierarchy, including empty folders, with breadcrumb navigation. Browse WeChat resources by conversation. Both sources support a flat file view, grid and list layouts, and sorting by modification time, size, or name. Conversations group files by date. |
 | Detect folder type | Detection is automatic by default. See the detected type and active mode in **Settings → Data & storage**. Override with Ordinary folder or WeChat conversations, or restore Automatic. Mode and grouping choices are saved separately for each resource root. |
 | Search and organize | Search filenames, tags, and bound conversation names or account identifiers. Combine file-type, conversation, and favorites filters; select multiple file types within a conversation. Add favorites and tags for later. |
-| Preview and play | View images, paired originals and thumbnails, file details, and TXT / MD / CSV previews. Play video and audio with seeking, volume, and speed controls; navigate audio with a waveform. Decode SILK and AMR-NB voice messages locally. |
+| Preview and play | View images, paired originals and thumbnails, file details, formatted Markdown, TXT and CSV, continuous PDF previews, and built-in Word, Excel, and PowerPoint viewers. Open previews fullscreen and press Esc to return. View syntax-highlighted source code and format supported files with Oxfmt. Play video and audio with seeking, volume, and speed controls; navigate audio with a waveform. Decode SILK and AMR-NB voice messages locally. |
 | Name conversations | Manually associate folder identifiers with confirmed contact names, group chats, or custom names. Import mappings in JSON; bindings are kept separately for each resource root. |
 | Export files | Reveal a file in Finder or copy up to 200 selected resources to a folder using the native directory picker. Exported files use `resourceID_originalFilename` and do not overwrite existing files. |
 
@@ -47,7 +48,7 @@ The interface supports English and Simplified Chinese, dark / light / system app
 
 ## Local data and limitations
 
-Weave reads the source directory without deleting, moving, renaming, or writing its files. Previews, playback, and voice decoding run locally without external requests. The local service listens only on `127.0.0.1`, using a random port and access path, and rejects cross-origin requests.
+Weave reads the source directory without deleting, moving, renaming, or writing its files. Previews, playback, and voice decoding run locally without external requests. The local service listens only on `127.0.0.1`, using random ports and an app access path. The Office renderer runs on an isolated local origin.
 
 Library metadata is stored separately in `~/Library/Application Support/Weave/`:
 
@@ -59,7 +60,8 @@ Library metadata is stored separately in `~/Library/Application Support/Weave/`:
 
 - **Conversation names are manual.** Weave does not decrypt contact or session databases, infer names from folder hashes, or verify account ownership.
 - **Preview support depends on the format.** Encrypted DAT / PIC images and unsupported media codecs cannot be previewed. SILK / AMR-NB decoding is limited to 16 MiB per file and 15 minutes of decoded audio; AMR-WB is unsupported. Original files can still be exported.
-- **Documents have limited previews.** TXT / MD / CSV previews show up to the first 128 KiB. PDF, Office, and HTML files are managed as files without embedding or executing their contents.
+- **Document previews.** Scroll through PDF pages continuously. Built-in Office renderers open DOC/DOCX, XLS/XLSX, and PPT/PPTX locally without a separate Office installation. Office previews are read-only, accept files up to 100 MiB, and can differ from the original layout.
+- **Text and code previews.** TXT, Markdown, CSV, and source files show up to the first 128 KiB. Markdown displays link and image labels as text. HTML opens as source code. The bundled Oxfmt formatter handles complete JS, TS, HTML, CSS, JSON, YAML, TOML, GraphQL, Vue, and MDX files among other supported variants. Formatting only changes the preview.
 - **Dates and availability come from local files.** Modification times may differ from message timestamps. Files removed from the source directory are no longer available for preview or export; rescan to refresh the library.
 
 ## Credit
