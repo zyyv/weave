@@ -87,6 +87,7 @@
   "resourceScanActivity": "Resource folder scan",
   "resourceScanComplete": "Scan complete. Resources are ready.",
   "buildingResourceIndex": "Building the resource index",
+  "rebuildingResourceIndex": "Rebuilding the index",
   "resourceIndexAutoUpdates": "Resources will appear automatically when ready.",
   "selectDirectoryNamed": "Select {name}",
   "skippedUnreadableResources": "Unreadable resources skipped: {p0}.",

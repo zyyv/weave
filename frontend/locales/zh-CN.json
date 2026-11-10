@@ -87,6 +87,7 @@
   "resourceScanActivity": "资源目录扫描",
   "resourceScanComplete": "扫描完成，资源已就绪。",
   "buildingResourceIndex": "正在建立资源索引",
+  "rebuildingResourceIndex": "正在重建索引",
   "resourceIndexAutoUpdates": "准备就绪后，资源会自动显示。",
   "selectDirectoryNamed": "选择「{name}」",
   "skippedUnreadableResources": "{p0} 个资源无法读取，已跳过。",

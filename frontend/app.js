@@ -251,6 +251,7 @@ function renderBreakdown(){
 function fileContext(x){return isWechat()?contactName(x.group):x.folder||folderName('')}
 async function changeSource(change){
  if(sourceBusy||choosingSource||state.scanning||!state.root)return;
+ const groupingOnly=!('mode' in change);
  const root=state.root;sourceBusy=true;updateDirectoryUI();$('#settingsState').textContent=t('saving');applyTheme();if(page==='settings')settingsUI.render();
  try{
   const snapshot=await api('source',{root,...source,...change});if(state.root!==root)return;
@@ -258,8 +259,20 @@ async function changeSource(change){
   source=snapshot.source;prefs.grouped=source.grouped;contacts=snapshot.contacts;
   if(groupingMode()!==previousGrouping)dateRange={start:'',end:''};
   scope='';if('mode' in change||isWechat())folder='';scopeKinds=[];offset=0;
-  clearCatalog();
-  applyTheme();renderBreakdown();groupOptions();header();navigation.reset(routeSnapshot());navigationButtons();await load();$('#settingsState').textContent=t('saved');return true;
+  if(groupingOnly){
+   commandPalette.close();
+   if($('#detail').open)closeDetail();
+   selected.clear();selection();
+   $('#group').value='';
+   $('#resourceScroll').scrollTop=0;
+  }else{
+   clearCatalog();
+   renderBreakdown();groupOptions();
+  }
+  header();navigation.reset(routeSnapshot());navigationButtons();
+  const loading=load({reusePage:groupingOnly,rebuilding:groupingOnly});
+  if(!groupingOnly)await loading;
+  $('#settingsState').textContent=t('saved');return true;
  }catch(e){$('#settingsState').textContent=t('saveFailed');toast(e.message,'error')}
  finally{sourceBusy=false;updateDirectoryUI();applyTheme();if(page==='settings')settingsUI.render()}
 }
@@ -356,10 +369,68 @@ function fileCover(x){
  return `<div class="file-symbol">${icon(kindIcon(x.kind))}<span>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</span></div>`;
 }
 function fallback(node,x){node.innerHTML=fileCover(x)}
-function retryThumbnail(img,id,modified){if(img.dataset.retried||img.getAttribute('src')===`thumb/${id}?v=${modified}&thumb=2`)return false;img.dataset.retried='true';img.src=`thumb/${id}?v=${modified}&thumb=2`;return true}
+// Leave loopback HTTP connections available for list and navigation requests.
+const watchedCovers=new Set(),waitingCovers=new Set(),activeCovers=new Map();
+const coverObserver=new IntersectionObserver(entries=>{
+ for(const {target,isIntersecting} of entries){
+  if(isIntersecting&&watchedCovers.has(target))waitingCovers.add(target);
+  else waitingCovers.delete(target);
+ }
+ loadImageCovers();
+},{root:$('#resourceScroll'),rootMargin:'150px'});
+function unwatchImageCover(img){
+ coverObserver.unobserve(img);
+ watchedCovers.delete(img);
+ waitingCovers.delete(img);
+}
+function loadImageCovers(){
+ for(const img of waitingCovers){
+  if(activeCovers.size>=2)break;
+  unwatchImageCover(img);
+  if(!img.isConnected)continue;
+  const complete=event=>{
+   if(event.type==='load')delete img.dataset.coverLoading;
+   cancel();
+   loadImageCovers();
+  };
+  const cancel=()=>{
+   img.removeEventListener('load',complete);
+   img.removeEventListener('error',complete);
+   activeCovers.delete(img);
+  };
+  activeCovers.set(img,cancel);
+  img.addEventListener('load',complete);
+  img.addEventListener('error',complete);
+  img.dataset.coverLoading='';
+  img.src=img.dataset.thumb;
+  delete img.dataset.thumb;
+ }
+}
+function watchImageCover(img){
+ if(watchedCovers.has(img))return;
+ watchedCovers.add(img);
+ coverObserver.observe(img);
+}
+function observeImageCovers(root){
+ for(const img of watchedCovers)if(!root.contains(img))unwatchImageCover(img);
+ for(const [img,cancel] of activeCovers)if(!root.contains(img)){
+  cancel();
+  img.removeAttribute('src');
+ }
+ for(const img of root.querySelectorAll('img[data-thumb]'))watchImageCover(img);
+ loadImageCovers();
+}
+function retryThumbnail(img,id,modified){
+ const url=`thumb/${id}?v=${modified}&thumb=2`;
+ if(img.dataset.retried||img.getAttribute('src')===url)return false;
+ img.dataset.retried='true';
+ img.dataset.thumb=url;
+ watchImageCover(img);
+ return true;
+}
 function scopeCover(cover){
  if(!cover)return `<span>${icon(kindIcon(kind||'folder'))}</span>`;
- const image=cover.preview?`<img src="thumb/${esc(cover.preview)}?v=${cover.modified}&thumb=2" decoding="async" alt="" loading="lazy">`:cover.kind==='video'?`<img data-video="${esc(cover.id)}" alt="" aria-hidden="true">`:icon('image');
+ const image=cover.preview?`<img data-thumb="thumb/${esc(cover.preview)}?v=${cover.modified}&thumb=2" decoding="async" alt="">`:cover.kind==='video'?`<img data-video="${esc(cover.id)}" alt="" aria-hidden="true">`:icon('image');
  return `<span data-cover-kind="${esc(cover.kind)}" data-cover-id="${esc(cover.id)}" data-cover-modified="${cover.modified}">${image}</span>`;
 }
 // Keep overlapping cards attached so scrolling does not restart image decoding or video covers.
@@ -393,17 +464,17 @@ function paint(visible){
  }
  const scopes=isScopes();$('#items').className=scopes?'scopes':prefs.view;
  if(scopes){reconcileCards(visible,visible.map(g=>`<article class="scope-card" data-scope="${esc(g.hash)}"><div class="scope-head"><span class="avatar">${g.hash==='未分组'?icon('folder'):contactAvatar(g.hash)}</span><button class="scope-identity" title="${t('openConversation')}"><strong>${esc(contactName(g.hash))}</strong><small>${contacts[g.hash]?esc(contacts[g.hash].type==='group'?t('groupChat'):contacts[g.hash].type==='person'?t('contact'):t('customGroup'))+' · ':''}${g.hash==='未分组'?'':esc(g.hash.slice(0,12))+'…'}</small></button><button ${g.hash==='未分组'?'hidden':''} class="icon scope-bind" aria-label="${t('bindOrEditConversation')}" title="${t('bindOrEditConversation')}">${icon('edit')}</button></div><button class="scope-covers" style="grid-template-columns:repeat(${Math.max(1,g.covers.length)},minmax(0,1fr))" aria-label="${t('browseResourcesIn', {p6: esc(contactName(g.hash))})}">${(g.covers.length?g.covers:[null]).map(scopeCover).join('')}</button><div class="scope-footer"><span>${t('resources', {p8: g.count.toLocaleString(), p9: bytes(g.bytes)})}</span><span>${coverDateFormats.short.format(g.modified)}</span></div><div class="scope-types">${Object.entries(g.counts).map(([k,n])=>`<span data-type="${k}">${icon(kindIcon(k))}${n.toLocaleString()}</span>`).join('')}</div></article>`),true);$$('[data-scope]').forEach(e=>{const hash=e.dataset.scope;e.querySelectorAll('.scope-identity,.scope-covers').forEach(b=>b.onclick=()=>enterScope(hash));e.querySelector('.scope-bind').onclick=()=>showSettings('bindings',hash);e.querySelectorAll('img:not([data-video])').forEach(img=>img.onerror=()=>{const slot=img.parentElement;if(slot.dataset.coverKind==='video'){img.removeAttribute('src');img.dataset.video=slot.dataset.coverId;observeVideoCovers(e)}else if(!retryThumbnail(img,slot.dataset.coverId,slot.dataset.coverModified))slot.innerHTML=icon('image')});e.querySelectorAll('[data-type]').forEach(el=>color(el,el.dataset.type))})}
- else{reconcileCards(visible,visible.map(x=>x.directory?`<article class="asset directory" data-folder="${esc([x.folder,x.name].filter(Boolean).join('/'))}"><button class="cover folder-cover" aria-label="${t('openFolder',{name:esc(x.name)})}">${icon('folder')}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta">${t('folder')}</div><div class="asset-context">${t('folder')}</div></article>`:`<article class="asset" data-id="${x.id}"><input type="checkbox" aria-label="${t('select', {p1: esc(x.name)})}"><button class="cover" aria-label="${t('preview', {p2: esc(x.name)})}">${x.kind==='video'&&!x.preview?`<img data-video="${x.id}" alt="" aria-hidden="true">`:x.preview?`<img src="thumb/${x.preview}?v=${x.modified}&thumb=2" decoding="async" loading="lazy" alt="">` :fileCover(x)}${x.kind==='video'?`<span class="media-kind">${icon('video')+t('video')}</span>`:''}${isWechat()&&x.thumbnail?`<span class="media-kind">${t('thumbnail')}</span>`:''}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta"><span>${bytes(x.size)}${x.star?icon('star'):''}</span><span>${coverDateFormats.short.format(x.modified)}</span></div><div class="asset-context"><span title="${esc(fileContext(x))}">${esc(fileContext(x))}</span><span>${esc(x.tags|| (isWechat()&&x.thumbnail?t('thumbnail'):t('originalFile')))}</span></div><div class="asset-format"><strong>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</strong><span>${esc(labels[x.kind]||t('otherFiles'))}</span></div><div class="asset-size">${bytes(x.size)}</div><time class="asset-modified" datetime="${new Date(x.modified).toISOString()}"><span>${coverDateFormats.date.format(x.modified)}</span><span>${coverDateFormats.time.format(x.modified)}</span></time><div class="asset-flags">${x.star?icon('star'):''}${x.tags?icon('tag'):''}</div></article>`),false);$$('.asset:not(.directory)').forEach(e=>{const x=itemIndex.get(e.dataset.id);color(e,x.kind);e.querySelector('input').onchange=ev=>setSelected(x.id,ev.target.checked);e.onclick=ev=>{
+ else{reconcileCards(visible,visible.map(x=>x.directory?`<article class="asset directory" data-folder="${esc([x.folder,x.name].filter(Boolean).join('/'))}"><button class="cover folder-cover" aria-label="${t('openFolder',{name:esc(x.name)})}">${icon('folder')}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta">${t('folder')}</div><div class="asset-context">${t('folder')}</div></article>`:`<article class="asset" data-id="${x.id}"><input type="checkbox" aria-label="${t('select', {p1: esc(x.name)})}"><button class="cover" aria-label="${t('preview', {p2: esc(x.name)})}">${x.kind==='video'&&!x.preview?`<img data-video="${x.id}" alt="" aria-hidden="true">`:x.preview?`<img data-thumb="thumb/${x.preview}?v=${x.modified}&thumb=2" decoding="async" alt="">` :fileCover(x)}${x.kind==='video'?`<span class="media-kind">${icon('video')+t('video')}</span>`:''}${isWechat()&&x.thumbnail?`<span class="media-kind">${t('thumbnail')}</span>`:''}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta"><span>${bytes(x.size)}${x.star?icon('star'):''}</span><span>${coverDateFormats.short.format(x.modified)}</span></div><div class="asset-context"><span title="${esc(fileContext(x))}">${esc(fileContext(x))}</span><span>${esc(x.tags|| (isWechat()&&x.thumbnail?t('thumbnail'):t('originalFile')))}</span></div><div class="asset-format"><strong>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</strong><span>${esc(labels[x.kind]||t('otherFiles'))}</span></div><div class="asset-size">${bytes(x.size)}</div><time class="asset-modified" datetime="${new Date(x.modified).toISOString()}"><span>${coverDateFormats.date.format(x.modified)}</span><span>${coverDateFormats.time.format(x.modified)}</span></time><div class="asset-flags">${x.star?icon('star'):''}${x.tags?icon('tag'):''}</div></article>`),false);$$('.asset:not(.directory)').forEach(e=>{const x=itemIndex.get(e.dataset.id);color(e,x.kind);e.querySelector('input').onchange=ev=>setSelected(x.id,ev.target.checked);e.onclick=ev=>{
   if(ev.target.closest('input'))return;
   if(ev.metaKey||ev.ctrlKey){
    ev.preventDefault();
    setSelected(x.id,!selected.has(x.id));
   }else if(ev.target.closest('button'))openDetail(x);
  };const img=e.querySelector('img');if(img&&!img.dataset.video)img.onerror=()=>{if(x.kind==='video'){img.removeAttribute('src');img.dataset.video=x.id;observeVideoCovers(e)}else if(!retryThumbnail(img,x.id,x.modified))fallback(e.querySelector('.cover'),x)}})}
- $$('.directory button').forEach(b=>b.onclick=()=>enterFolder(b.closest('[data-folder]').dataset.folder));observeVideoCovers($('#items'));selection();
+ $$('.directory button').forEach(b=>b.onclick=()=>enterFolder(b.closest('[data-folder]').dataset.folder));observeImageCovers($('#items'));observeVideoCovers($('#items'));selection();
 }
 let itemIndex=new Map(),loadingMore=false,loadFailed=false,requestParams='',listAbort=null;
-let resultKey='',requestKey='',catalogIndexing=false,scanToast;
+let resultKey='',requestKey='',catalogIndexing=false,scanToast,listLoadingText;
 const catalogPages=new Map();
 $('#catalogLoadingMark').append(loadingMark());
 const virtual=new VirtualList($('#resourceScroll'),$('#items'),paint,()=>loadMore(),$('#timelineRail'),compactBytes);
@@ -437,8 +508,9 @@ function render(){
  header();syncSelects();selection();
 }
 function setListLoading(label){
+ listLoadingText=label;
  const status=$('#loadState');
- status.replaceChildren(loadingMark(),document.createTextNode(label));
+ status.replaceChildren(loadingMark(),document.createTextNode(label()));
  status.classList.add('is-loading');
  status.disabled=true;
  $('#items').setAttribute('aria-busy','true');
@@ -451,12 +523,12 @@ function finishListLoading(){
 }
 async function loadMore(){
  if(loadingMore||loadFailed||resultKey!==requestKey||result.items.length>=result.total)return;
- const v=version;loadingMore=true;setListLoading(t('loadingMore'));
+ const v=version;loadingMore=true;setListLoading(()=>t('loadingMore'));
  try{const p=new URLSearchParams(requestParams);p.set('offset',result.items.length);const r=await api((resultMode+'?')+p,undefined,listAbort?.signal);if(v!==version)return;if(!r.items.length){loadFailed=true;$('#loadState').textContent=t('theListHasChangedClickToRetry');return}result.items.push(...r.items);for(const item of r.items)itemIndex.set(item.id,item);render()}
  catch(e){if(v===version&&e.name!=='AbortError'){loadFailed=true;$('#loadState').textContent=t('couldNotLoadClickToRetry')}}finally{if(v===version){loadingMore=false;finishListLoading();if(!loadFailed){$('#loadState').textContent=result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');virtual.draw()}}}
 }
 $('#loadState').onclick=()=>{if(resultKey!==requestKey||!result.items.length){load();return}loadFailed=false;loadMore()};
-async function load({scrollTop,reusePage=false}={}){
+async function load({scrollTop,reusePage=false,rebuilding=false}={}){
  listAbort?.abort();listAbort=new AbortController();const v=++version,endpoint=resultEndpoint();loadingMore=true;loadFailed=false;
  const restore=scrollTop??0;
  const p=new URLSearchParams({kind:scope?scopeKinds.join(','):kind,star:star?'1':'0',search:searchQuery,group:scope,folder,private:inVault?'1':'0',sort:listSort(),thumbs:!isWechat()||prefs.thumbs?'1':'0',offset:0,limit:200});
@@ -473,11 +545,15 @@ async function load({scrollTop,reusePage=false}={}){
  if(!reusePage||state.scanning)catalogPages.clear();
  const cacheable=!!state.root&&!inVault&&!state.scanning&&!p.get('search');
  const cached=cacheable?catalogPages.get(key):null;
+ let rebuildNotice;
  if(!cached){
   $('#empty').hidden=true;
-  $('#items').hidden=resultKey!==key;
+  $('#items').hidden=rebuilding||resultKey!==key;
   $('#summary').textContent=stateSummary();
-  setListLoading(t('loading'));
+  setListLoading(()=>t('loading'));
+  if(rebuilding)rebuildNotice=setTimeout(()=>{
+   if(v===version)setListLoading(()=>t('rebuildingResourceIndex'));
+  },180);
  }
  try{
  const r=cached??await api(key,undefined,listAbort.signal);
@@ -486,7 +562,7 @@ async function load({scrollTop,reusePage=false}={}){
   folder=r.folderFallback;
   offset=0;
   header();
-  return load();
+  return load({reusePage,rebuilding});
  }
  if(cacheable&&!state.scanning){
   catalogPages.delete(key);
@@ -510,7 +586,7 @@ async function load({scrollTop,reusePage=false}={}){
  if(restore)$('#resourceScroll').scrollTop=restore;
  $('#loadState').textContent=result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');
  }catch(e){if(v===version&&e.name!=='AbortError'){resultKey='';$('#notice').textContent=t('couldNotLoadResources')+e.message;$('#loadState').textContent=t('clickToRetry');loadFailed=true}}
- finally{if(v===version){finishCatalogIndex();loadingMore=false;finishListLoading();virtual.draw()}}
+ finally{clearTimeout(rebuildNotice);if(v===version){finishCatalogIndex();loadingMore=false;finishListLoading();virtual.draw()}}
 }
 function stateSummary(){
  if(state.scanning&&!result.items.length)return t('scanningFilesFound',{p0:(state.scanned||0).toLocaleString(getLocale())});
@@ -745,6 +821,7 @@ function clearCatalog(){
  $('#items').hidden=false;
  virtual.set([],{scopes:isScopes(),list:prefs.view==='list'});
  $('#items').replaceChildren();
+ observeImageCovers($('#items'));
  $('#empty').hidden=true;
  selection();
  clearVideoCovers();clearAudioCache();
@@ -1076,7 +1153,7 @@ document.addEventListener('keydown',e=>{
 function applyLocale(){
  setLocale(prefs.locale);translateStatic();updateDirectoryUI();labels=kindLabels();groupOptions();applyTheme();
  renderBreakdown();
- renderState();if(loadingMore)setListLoading(t('loading'));else $('#loadState').textContent=loadFailed?t('clickToRetry'):result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');render();header();updateUsage();if(page==='settings')settingsUI.render();setupTour?.refresh();
+ renderState();if(loadingMore&&listLoadingText)setListLoading(listLoadingText);else $('#loadState').textContent=loadFailed?t('clickToRetry'):result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');render();header();updateUsage();if(page==='settings')settingsUI.render();setupTour?.refresh();
 }
 installSelects();renderIcons();selection();applyTheme();
 async function start(){
