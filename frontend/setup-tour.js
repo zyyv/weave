@@ -1,7 +1,7 @@
 import {t, getLocale} from './i18n.js';
 
 // The tour follows the app's actual route and uses the existing controls.
-export function createSetupTour({getState,getRoute,getBusy,isDismissed,onDismiss,onComplete,onPreviewComplete,revealSettings}){
+export function createSetupTour({getState,getRoute,getBusy,isDismissed,onDismiss,onComplete,onPreviewComplete}){
  const layer=document.createElement('div');
  layer.className='setup-tour';layer.hidden=true;
  layer.innerHTML=`<div class="tour-spotlight" aria-hidden="true"></div><section class="tour-panel" tabindex="-1" role="dialog" aria-modal="false" aria-labelledby="tourTitle" aria-describedby="tourDescription"><div class="tour-progress" aria-live="polite"></div><div class="tour-track" aria-hidden="true"><span></span><span></span><span></span></div><div class="tour-copy"><h2 id="tourTitle"></h2><p id="tourDescription"></p></div><div class="tour-actions"><button class="tour-dismiss" type="button"></button><button class="tour-next primary" type="button"></button></div></section>`;
@@ -48,7 +48,6 @@ export function createSetupTour({getState,getRoute,getBusy,isDismissed,onDismiss
   if(getState().root&&!preview){stop();onComplete();return}
   const entering=layer.hidden,before=entering?null:panel.getBoundingClientRect();
   const route=getRoute(),index=route.page!=='settings'?0:route.tab!=='data'?1:2,changed=index!==step;
-  if(index===0)revealSettings();
   const current=steps[index],target=document.querySelector(current.target);
   if(!target)return;
   if(changed){step=index;target.scrollIntoView({block:'nearest',inline:'nearest'})}
@@ -82,7 +81,7 @@ export function createSetupTour({getState,getRoute,getBusy,isDismissed,onDismiss
  next.onclick=()=>{if(preview&&step===steps.length-1){stop();onPreviewComplete();return}const target=document.querySelector(steps[step]?.target);if(target&&!target.disabled)target.click();schedule()};
  dismiss.onclick=skip;
  document.addEventListener('click',schedule,true);
- document.addEventListener('keydown',event=>{if(active&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();skip()}},true);
+ document.addEventListener('keydown',event=>{if(active&&event.key==='Escape'&&!event.target.closest?.('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();skip()}},true);
  reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches)for(const animation of [layerMotion,panelMotion,copyMotion])if(animation?.playState==='running')animation.finish()});
  window.addEventListener('resize',schedule);document.addEventListener('scroll',schedule,true);
  // Sidebar transitions can move the first target after its initial measurement.

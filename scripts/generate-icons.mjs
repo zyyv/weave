@@ -26,7 +26,7 @@ const names = {
   transparency: 'transparency', camera: 'camera-01', lens: 'camera-lens', calendar: 'calendar-03',
   clock: 'clock-01', color: 'colors', location: 'location-01', aperture: 'aperture',
   ruler: 'ruler', info: 'information-circle', histogram: 'chart-histogram',
-  copy: 'copy-01', path: 'path', folderOpen: 'folder-open',
+  copy: 'copy-01', path: 'path', folderOpen: 'folder-open', pin: 'pin', drive: 'hard-drive',
 };
 const markup = {};
 for (const [alias, name] of Object.entries(names)) {

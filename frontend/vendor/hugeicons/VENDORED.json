@@ -69,6 +69,8 @@
     "histogram": "chart-histogram",
     "copy": "copy-01",
     "path": "path",
-    "folderOpen": "folder-open"
+    "folderOpen": "folder-open",
+    "pin": "pin",
+    "drive": "hard-drive"
   }
 }

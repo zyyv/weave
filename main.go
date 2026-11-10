@@ -145,7 +145,7 @@ func main() {
 				return
 			}
 			action := strings.TrimPrefix(path, "api/")
-			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" {
+			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" && action != "resource" {
 				http.Error(w, "POST required", 405)
 				return
 			}
@@ -165,6 +165,27 @@ func main() {
 					LastRoot string  `json:"lastRoot"`
 					Entries  []entry `json:"entries"`
 				}{last, entries})
+			case "resource":
+				item, err := lib.PublicItem(r.URL.Query().Get("root"), r.URL.Query().Get("id"))
+				if err != nil {
+					http.NotFound(w, r)
+					return
+				}
+				jsonOut(item)
+			case "directory-pin":
+				var in struct {
+					Root   string
+					Pinned bool
+				}
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				if e := prefs.PinDirectory(in.Root, in.Pinned); e != nil {
+					fail(e)
+					return
+				}
+				jsonOut(true)
 			case "directory-edit":
 				var in struct{ Root, Path, Name string }
 				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {

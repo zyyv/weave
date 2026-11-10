@@ -13,6 +13,7 @@ type Directory struct {
 	Path       string `json:"path"`
 	Name       string `json:"name"`
 	LastOpened int64  `json:"lastOpened"`
+	Pinned     bool   `json:"pinned,omitempty"`
 }
 
 func (s *Store) Directories() (string, []Directory) {
@@ -43,6 +44,7 @@ func (s *Store) OpenDirectory(root string) error {
 	entry := Directory{Path: root, LastOpened: time.Now().UnixMilli()}
 	if i := slices.IndexFunc(d.Directories, func(dir Directory) bool { return dir.Path == root }); i >= 0 {
 		entry.Name = d.Directories[i].Name
+		entry.Pinned = d.Directories[i].Pinned
 		d.Directories = slices.Delete(d.Directories, i, i+1)
 	}
 	d.Directories = append([]Directory{entry}, d.Directories...)
@@ -71,6 +73,22 @@ func (s *Store) EditDirectory(root, path, name string) error {
 	d.Directories = slices.Clone(d.Directories)
 	d.Directories[i].Path = path
 	d.Directories[i].Name = name
+	return s.save(d)
+}
+
+func (s *Store) PinDirectory(root string, pinned bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.data.Directories, func(dir Directory) bool { return dir.Path == root })
+	if i < 0 {
+		return errors.New("找不到这条目录记录")
+	}
+	if s.data.Directories[i].Pinned == pinned {
+		return nil
+	}
+	d := s.data
+	d.Directories = slices.Clone(d.Directories)
+	d.Directories[i].Pinned = pinned
 	return s.save(d)
 }
 

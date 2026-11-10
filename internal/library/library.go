@@ -369,6 +369,20 @@ func (l *Library) Item(id string, tokens ...string) (Item, error) {
 	return l.item(id, tokens)
 }
 
+// PublicItem resolves a saved resource against its original, currently active source.
+func (l *Library) PublicItem(root, id string) (Item, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if root != l.state.Root || l.state.Scanning {
+		return Item{}, os.ErrNotExist
+	}
+	x, err := l.item(id, nil)
+	if err != nil {
+		return Item{}, err
+	}
+	return l.itemForView(x, false), nil
+}
+
 func (l *Library) item(id string, tokens []string) (Item, error) {
 	i, ok := l.ids[id]
 	if !ok || !l.canRead(id, tokens) {
