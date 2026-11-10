@@ -805,7 +805,7 @@ function updateDirectoryUI(){
  updateCatalogLoading(label);
  $('#directoryActivity').hidden=!label;
  if($('#directoryActivityLabel').textContent!==label)$('#directoryActivityLabel').textContent=label;
- $('#refresh').disabled=state.scanning||choosingSource||sourceBusy;
+ $('#refresh').disabled=!state.root||state.scanning||choosingSource||sourceBusy;
  syncGroupingControls();
  settingsUI?.updateDirectoryStatus();
 }
@@ -894,7 +894,7 @@ $('#lockVault').onclick=()=>leaveVault();
 $('#privateSelected').onclick=()=>updatePrivacy([...selected],!inVault);
 $('#privateItem').onclick=()=>{if(detail)updatePrivacy([detail.id],!inVault)};
 
-settingsUI=createSettings({$,esc,icon,api,toast,getPrefs:()=>prefs,getState:()=>state,getContacts:()=>contacts,getSource:()=>source,isWechat,sourceBusy:()=>sourceBusy||choosingSource,changeSource,groupingMode,groupingOptions,changeGrouping,setPref,onNavigate:navigate,onContacts:c=>{contacts=c;groupOptions();syncSelects();load()},choose,rescan,directoryName:directoryUI.name,directoryEntries:directoryUI.entries,editDirectory:directoryUI.edit,removeDirectory:directoryUI.remove,directoryActivity,getPendingDirectory:()=>pendingDirectory?.path,getDevelopment:()=>development,startTour:()=>setupTour.start({force:true}),replayTour:()=>{navigate(()=>showLibrary());setupTour.start({force:true,preview:true})}});
+settingsUI=createSettings({$,esc,icon,api,toast,getPrefs:()=>prefs,getState:()=>state,getContacts:()=>contacts,getSource:()=>source,isWechat,sourceBusy:()=>sourceBusy||choosingSource,changeSource,groupingMode,groupingOptions,changeGrouping,setPref,onNavigate:navigate,onContacts:c=>{contacts=c;groupOptions();syncSelects();load()},choose,rescan,directoryName:directoryUI.name,directoryEntries:directoryUI.entries,editDirectory:async (...args)=>{await directoryUI.edit(...args);await refreshState()},removeDirectory:async root=>{await directoryUI.remove(root);await refreshState()},directoryActivity,getPendingDirectory:()=>pendingDirectory?.path,getDevelopment:()=>development,startTour:()=>setupTour.start({force:true}),replayTour:()=>{navigate(()=>showLibrary());setupTour.start({force:true,preview:true})}});
 setupTour=createSetupTour({getState:()=>state,getRoute:()=>({page,tab:settingsUI.location().tab}),getBusy:()=>choosingSource,isDismissed:()=>prefs.setupTourDismissed,onDismiss:()=>setPref('setupTourDismissed',true),onComplete:()=>toast(t('tourComplete')),onPreviewComplete:()=>toast(t('tourPreviewComplete'))});
 function renderImageOverview(img,item){
  const width=img.naturalWidth,height=img.naturalHeight;if(!width||!height)return;

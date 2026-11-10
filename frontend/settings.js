@@ -51,7 +51,7 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
       ${entry.broken?`<span class="directory-history-status">${t('directoryBroken')}</span>`:''}
      </div>
      <div class="directory-history-actions">
-      ${entries.length>1?`<button type="button" class="switch" role="switch" aria-label="${esc(t('selectDirectoryNamed',{name}))}" title="${esc(t('selectDirectoryNamed',{name}))}" data-directory-select="${esc(entry.path)}" ${disabled}></button>`:''}
+      <button type="button" class="switch" role="switch" aria-label="${esc(t('selectDirectoryNamed',{name}))}" title="${esc(t('selectDirectoryNamed',{name}))}" data-directory-select="${esc(entry.path)}" ${disabled}></button>
       <button type="button" class="icon" data-directory-edit="${esc(entry.path)}" aria-label="${esc(t('editDirectoryNamed',{name}))}" title="${t('edit')}" ${disabled}>${icon('edit')}</button>
       <button type="button" class="icon" data-directory-remove="${esc(entry.path)}" aria-label="${esc(t('removeDirectoryNamed',{name}))}" title="${t('removeDirectory')}" ${disabled}>${icon('trash')}</button>
      </div>
@@ -110,6 +110,7 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
   const busy=directoryBusy()||historySaving;
   content.querySelectorAll('button,input').forEach(control=>{control.disabled=busy});
   content.querySelectorAll('[data-directory-select]').forEach(button=>{
+   button.hidden=directoryEntries().length===1&&button.dataset.directorySelect===selected;
    button.setAttribute('aria-checked',String(button.dataset.directorySelect===selected));
   });
  }

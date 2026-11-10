@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -54,7 +55,13 @@ func main() {
 	if e != nil {
 		log.Fatal(e)
 	}
-	if last, _ := prefs.Directories(); last == "" {
+	last, dirs := prefs.Directories()
+	if last != "" && !slices.ContainsFunc(dirs, func(dir preferences.Directory) bool { return dir.Path == last }) {
+		if e := prefs.RemoveDirectory(last); e != nil {
+			log.Fatal(e)
+		}
+	}
+	if prefs.NeedsDirectoryImport() {
 		if b, err := os.ReadFile(filepath.Join(*data, "source.txt")); err == nil && len(b) > 0 {
 			legacy, err := filepath.Abs(string(b))
 			if err != nil {
@@ -198,7 +205,14 @@ func main() {
 						path = resolved
 					}
 				}
-				if e := prefs.EditDirectory(in.Root, path, in.Name); e != nil {
+				var e error
+				edit := func() error { return prefs.EditDirectory(in.Root, path, in.Name) }
+				if filepath.Clean(path) != in.Root {
+					e = lib.CloseDirectory(in.Root, edit)
+				} else {
+					e = edit()
+				}
+				if e != nil {
 					fail(e)
 					return
 				}
@@ -209,7 +223,7 @@ func main() {
 					fail(e)
 					return
 				}
-				if e := prefs.RemoveDirectory(in.Root); e != nil {
+				if e := lib.CloseDirectory(in.Root, func() error { return prefs.RemoveDirectory(in.Root) }); e != nil {
 					fail(e)
 					return
 				}
@@ -380,7 +394,7 @@ func main() {
 					jsonOut(lib.List(query))
 				}
 			case "scan":
-				if e := lib.Scan(lib.Status().Root); e != nil {
+				if e := lib.Rescan(); e != nil {
 					fail(e)
 					return
 				}

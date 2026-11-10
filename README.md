@@ -2,41 +2,18 @@
 
 [简体中文](README.zh-CN.md)
 
-A macOS desktop app for browsing, organizing, and exporting files from local resource folders. Find images, videos, voice messages, and documents in one library, with automatic detection of ordinary folders and WeChat conversation resources, plus built-in media previews.
+Weave is a local file browser for macOS. It recognizes ordinary folders and WeChat conversation directories, so you can find, preview, organize, and export images, videos, voice messages, and documents while keeping the originals in place.
 
-Built with Go and MyGo, using the system WKWebView. The packaged app needs no Electron, Node.js, or Go runtime.
-
-## Installation and first launch
-
-Requires macOS 12 or later. Choose a package matching your Mac: `arm64` for Apple silicon or `amd64` for Intel. Availability depends on the files attached to the release.
-
-1. Download and open the `.dmg` from this project's GitHub Releases.
-2. Drag **Weave.app** into **Applications**, then launch Weave from Applications. Eject the disk image after installation. Alternatively, download the ZIP, extract it, and move Weave.app into Applications.
-3. If macOS blocks the first launch, after attempting to open the app, go to **System Settings → Privacy & Security → Open Anyway**, authenticate if prompted, and confirm opening it. On older macOS versions, use **System Preferences → Security & Privacy → General**. macOS saves an exception for this app, so subsequent launches normally work directly.
-
-**The current build uses only a local ad-hoc signature. It has no Apple Developer ID signature and is not notarized by Apple.** Only allow an app whose source you trust and which has not been tampered with; see [Apple's instructions](https://support.apple.com/en-us/102445). If macOS reports that the app is damaged or contains malware, stop installation, download it again, and report the exact message instead of treating it as an ordinary unidentified-developer warning.
-
-## Build locally
-
-On macOS, install Go (see `go.mod`) and Node.js 22.12 or later, then run:
-
-```sh
-npm ci
-./build.sh
-```
-
-The script reads the version from `package.json` and produces `build/Weave.app`, `build/Weave-v<version>-macOS-<arch>.dmg`, and `.zip`, using the local Go target architecture by default (typically `arm64` on Apple silicon). It verifies the app signature and DMG checksum. Use these generated packages; copying `.app` bundles directly through synced Documents folders can affect signing metadata.
-
-## Development preview
-
-After `npm ci`, run `npm run dev` for the desktop app with development tools, or `npm run dev:browser` for a browser preview that reads frontend changes on refresh.
-
-The `--dev` flag enables development tools. In Settings → Data & storage, click Replay tour (dev) to preview from the first step without clearing the source folder or completion status. Click Finish preview at the last step. Development tools are off by default for normal launches and packaged apps.
+<p>
+  <img src="assets/screenshots/directory-overview.png" width="49%" alt="Directory overview showing storage, file types, and a year of activity">
+  <img src="assets/screenshots/wechat-library.png" width="49%" alt="WeChat library grouped by conversation">
+</p>
 
 ## Features
 
 | Feature | What you can do |
 | --- | --- |
+| Directory overview | See storage use, file and folder counts, file type breakdown, and a year of file activity. |
 | Browse your library | Browse ordinary folders by their real hierarchy, including empty folders, with breadcrumb navigation. Browse WeChat resources by conversation. Both sources support a flat file view, grid and list layouts, and sorting by modification time, size, or name. Conversations group files by date. |
 | Detect folder type | Detection is automatic by default. See the detected type and active mode in **Settings → Data & storage**. Override with Ordinary folder or WeChat conversations, or restore Automatic. Mode and grouping choices are saved separately for each resource root. |
 | Search and organize | Search filenames, tags, and bound conversation names or account identifiers. Combine file-type, conversation, and favorites filters; select multiple file types within a conversation. Add favorites and tags for later. |
@@ -45,6 +22,23 @@ The `--dev` flag enables development tools. In Settings → Data & storage, clic
 | Export files | Reveal a file in Finder or copy up to 200 selected resources to a folder using the native directory picker. Exported files use `resourceID_originalFilename` and do not overwrite existing files. |
 
 The interface supports English and Simplified Chinese, dark / light / system appearance, three color palettes, and comfortable or compact spacing. Preferences are saved automatically. Virtual scrolling, thumbnail caching, and background audio decoding help keep large libraries responsive.
+
+## Quick start
+
+1. Click **New Source** in the sidebar and choose a local folder. Weave scans it and detects whether it contains ordinary folders or WeChat conversation resources.
+2. Press `⌘K` or click the magnifying glass in the sidebar to open the command palette. Pin frequently used folders in the sidebar.
+3. Click the info button next to the current directory usage at the bottom of the sidebar to open the directory overview.
+4. Select the files you want to copy, click **Export selected**, and choose a destination folder.
+
+### Installation and first launch
+
+Requires macOS 12 or later. Choose a package matching your Mac: `arm64` for Apple silicon or `amd64` for Intel. Availability depends on the files attached to the release.
+
+1. Download and open the `.dmg` from [GitHub Releases](https://github.com/zyyv/weave/releases).
+2. Drag **Weave.app** into **Applications**, then launch Weave from Applications. Eject the disk image after installation. Alternatively, download the ZIP, extract it, and move Weave.app into Applications.
+3. If macOS blocks the first launch, after attempting to open the app, go to **System Settings → Privacy & Security → Open Anyway**, authenticate if prompted, and confirm opening it. On older macOS versions, use **System Preferences → Security & Privacy → General**. macOS saves an exception for this app, so subsequent launches normally work directly.
+
+**The current build uses only a local ad-hoc signature. It has no Apple Developer ID signature and is not notarized by Apple.** Only allow an app whose source you trust and which has not been tampered with; see [Apple's instructions](https://support.apple.com/en-us/102445). If macOS reports that the app is damaged or contains malware, stop installation, download it again, and report the exact message instead of treating it as an ordinary unidentified-developer warning.
 
 ## Local data and limitations
 
@@ -64,18 +58,45 @@ Library metadata is stored separately in `~/Library/Application Support/Weave/`:
 - **Text and code previews.** TXT, Markdown, CSV, and source files show up to the first 128 KiB. Markdown displays link and image labels as text. HTML opens as source code. The bundled Oxfmt formatter handles complete JS, TS, HTML, CSS, JSON, YAML, TOML, GraphQL, Vue, and MDX files among other supported variants. Formatting only changes the preview.
 - **Dates and availability come from local files.** Modification times may differ from message timestamps. Files removed from the source directory are no longer available for preview or export; rescan to refresh the library.
 
-## Credit
+## Build locally
 
-Weave uses these open-source projects:
+On macOS, install Go (see `go.mod`) and Node.js 22.12 or later, then run:
+
+```sh
+npm ci
+./build.sh
+```
+
+The script reads the version from `package.json` and produces `build/Weave.app`, `build/Weave-v<version>-macOS-<arch>.dmg`, and `.zip`, using the local Go target architecture by default (typically `arm64` on Apple silicon). It verifies the app signature and DMG checksum. Use these generated packages; copying `.app` bundles directly through synced Documents folders can affect signing metadata.
+
+### Development preview
+
+After `npm ci`, run `npm run dev` for the desktop app with development tools, or `npm run dev:browser` for a browser preview that reads frontend changes on refresh.
+
+The `--dev` flag enables development tools. In Settings → Data & storage, click Replay tour (dev) to preview from the first step without clearing the source folder or completion status. Click Finish preview at the last step. Development tools are off by default for normal launches and packaged apps.
+
+## Credits
+
+Weave uses the following open-source projects.
 
 | Dependency | Role |
 | --- | --- |
-| [Hugeicons](https://icon-sets.iconify.design/hugeicons/) · `@iconify-json/hugeicons` 1.2.35 | Interface and player icons, bundled locally as SVG. [MIT](frontend/vendor/hugeicons/LICENSE.txt). |
+| [Hugeicons](https://github.com/hugeicons/hugeicons) · `@iconify-json/hugeicons` 1.2.35 | Interface and player icons, bundled locally as SVG. [MIT](frontend/vendor/hugeicons/LICENSE.txt). |
 | [MyGo](https://github.com/egoist/mygo) · 0.7.4 | macOS desktop shell and system WKWebView integration. |
 | [WaveSurfer.js](https://github.com/katspaugh/wavesurfer.js) · 8.0.5 | Audio playback and waveform navigation. [BSD-3-Clause](frontend/vendor/wavesurfer/LICENSE). |
 | [Video.js](https://github.com/videojs/video.js) · 10.3.0 | Video playback with the Neutral skin, bundled from `@videojs/cdn`. [Apache-2.0](frontend/vendor/videojs/APACHE-LICENSE-2.0.txt); [upstream notices](frontend/vendor/videojs/LICENSE). |
 | [silk-wasm](https://github.com/idranme/silk-wasm) · 3.7.1 | Local decoding of SILK voice messages. [MIT](frontend/vendor/SILK-LICENSE.txt). |
 | [benz-amr-recorder](https://github.com/BenzLeung/benz-amr-recorder) · 1.1.5 | Local AMR-NB decoding using its worker source. [MIT and decoder notices](frontend/vendor/AMR-LICENSE.txt). |
 | [x18n](https://github.com/x18n-dev/x18n) | English and Simplified Chinese translation management during development. |
+| [File Viewer](https://github.com/flyfish-dev/file-viewer) | Built-in Office previews. [Licenses](frontend/office-frame/vendor/licenses/). |
+| [PDF.js](https://github.com/mozilla/pdf.js) | PDF rendering. [Apache-2.0](frontend/vendor/pdfjs/LICENSE). |
+| [Marked](https://github.com/markedjs/marked) | Markdown parsing. [MIT](frontend/vendor/marked/LICENSE.md). |
+| [Prism](https://github.com/PrismJS/prism) | Syntax highlighting. [MIT](frontend/vendor/prism/LICENSE). |
+| [Oxfmt](https://github.com/oxc-project/oxc) | Source formatting for previews. |
+| [exifr](https://github.com/MikeKovarik/exifr) | Image metadata parsing. [MIT](frontend/vendor/exifr/LICENSE). |
 
 Media dependencies are bundled locally. The SILK module and WebAssembly files are unmodified; the AMR decoder's CommonJS factory is wrapped for use as a standalone worker, without microphone or recording APIs. Decoder license notices are retained. Video.js production JavaScript and CSS and the WaveSurfer ESM bundle are retained with their licenses; package sources and integrity hashes are recorded in the respective `VENDORED.json` files. Playback and decoding use local assets, with no analytics or remote media services enabled.
+
+## License
+
+Weave is licensed under the [MIT License](LICENSE). See Credits above for third-party licenses and notices.

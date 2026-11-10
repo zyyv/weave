@@ -147,16 +147,44 @@ func ProbeRoot(root string) (string, error) {
 	return resolvedDirectory(f, abs), nil
 }
 
+// CloseDirectory persists the directory change before dropping the active catalog.
+func (l *Library) CloseDirectory(root string, persist func() error) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.state.Scanning {
+		return fmt.Errorf("正在扫描，请等待完成")
+	}
+	if err := persist(); err != nil {
+		return err
+	}
+	if l.state.Root == root {
+		l.items, l.folders, l.ids = nil, nil, nil
+		l.vault.token = ""
+		l.state = Status{}
+		l.reindex()
+	}
+	return nil
+}
+
+func (l *Library) Rescan() error {
+	return l.scanDirectory(l.Status().Root, nil, true)
+}
+
 func (l *Library) Scan(root string) error {
 	return l.ScanDirectory(root, nil)
 }
 
 func (l *Library) ScanDirectory(root string, onOpen func(string) error) error {
+	return l.scanDirectory(root, onOpen, false)
+}
+
+func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan bool) error {
+	requested := root
 	resolved, err := ProbeRoot(root)
 	if err != nil {
 		err = fmt.Errorf("目录无法打开: %w", err)
 		l.mu.Lock()
-		if l.state.Root == root || l.state.Updated == 0 {
+		if l.state.Root == root || (!rescan && l.state.Updated == 0) {
 			l.state.Error = err.Error()
 		}
 		l.mu.Unlock()
@@ -167,6 +195,10 @@ func (l *Library) ScanDirectory(root string, onOpen func(string) error) error {
 	if l.state.Scanning {
 		l.mu.Unlock()
 		return fmt.Errorf("正在扫描，请等待完成")
+	}
+	if rescan && l.state.Root != requested {
+		l.mu.Unlock()
+		return fmt.Errorf("目录已变化，请重试")
 	}
 	switching := l.state.Root != root
 	if switching {

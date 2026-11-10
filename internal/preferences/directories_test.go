@@ -35,7 +35,7 @@ func TestDirectoryHistoryPreservesAliasesAndLastRoot(t *testing.T) {
 	}
 }
 
-func TestDirectoryHistoryEditsLeaveCurrentRootUnchanged(t *testing.T) {
+func TestEditingActiveDirectoryPathClearsSelection(t *testing.T) {
 	data := t.TempDir()
 	s, err := New(data)
 	if err != nil {
@@ -64,7 +64,44 @@ func TestDirectoryHistoryEditsLeaveCurrentRootUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	last, history := s.Directories()
-	if last != current || len(history) != 1 || history[0] != (Directory{Path: offline, Name: "Offline archive", LastOpened: before[0].LastOpened}) {
+	if last != "" || len(history) != 1 || history[0] != (Directory{Path: offline, Name: "Offline archive", LastOpened: before[0].LastOpened}) {
 		t.Fatalf("unexpected current root or history: %q %+v", last, history)
+	}
+}
+
+func TestRemoveAllDirectoriesPreservesEmptySelection(t *testing.T) {
+	data := t.TempDir()
+	s, err := New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := filepath.Join(data, "first"), filepath.Join(data, "second")
+	if err := s.ImportDirectory(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.OpenDirectory(second); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveDirectory(second); err != nil {
+		t.Fatal(err)
+	}
+	if last, dirs := s.Directories(); last != "" || len(dirs) != 1 || dirs[0].Path != first {
+		t.Fatalf("unexpected directory selection: %q %+v", last, dirs)
+	}
+	if err := s.RemoveDirectory(first); err != nil {
+		t.Fatal(err)
+	}
+	s, err = New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.NeedsDirectoryImport() {
+		t.Fatal("empty selection requested a legacy import")
+	}
+	if err := s.ImportDirectory(first); err != nil {
+		t.Fatal(err)
+	}
+	if last, dirs := s.Directories(); last != "" || len(dirs) != 0 {
+		t.Fatalf("directories reappeared: %q %+v", last, dirs)
 	}
 }

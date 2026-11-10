@@ -135,14 +135,13 @@ export function createDirectorySwitcher({api, choose, openSettings, openResource
   hideInfo();
   const pinned = entries.filter(entry => entry.pinned);
   const sources = entries.filter(entry => !entry.pinned);
-  if (root && !entries.some(entry => entry.path === root)) sources.unshift({path: root});
-  const rows = list => list.map(entry => sourceRow(entry, path === entry.path, busy, entry.lastOpened !== undefined));
+  const rows = list => list.map(entry => sourceRow(entry, path === entry.path, busy));
   $('#pinnedSources').hidden = !pinned.length;
   $('#pinnedSourceRows').replaceChildren(...rows(pinned));
   $('#sourceRows').replaceChildren(...(sources.length ? rows(sources) : [empty(pinned.length ? t('noUnpinnedSources') : t('noSources'))]));
   const recent = [
    ...entries.filter(entry => entry.lastOpened).map(entry => ({entry, time: entry.lastOpened})),
-   ...recentFiles.filter(file => file.root === root || entries.some(entry => entry.path === file.root))
+   ...recentFiles.filter(file => entries.some(entry => entry.path === file.root))
   ].sort((a, b) => b.time - a.time).slice(0, 12);
   $('#recentSourceRows').replaceChildren(...(recent.length ? recent.map(item => {
    if (item.entry) return sourceRow(item.entry, false, busy, false);

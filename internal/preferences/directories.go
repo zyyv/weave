@@ -22,14 +22,21 @@ func (s *Store) Directories() (string, []Directory) {
 	return s.data.LastDirectory, append([]Directory{}, s.data.Directories...)
 }
 
+func (s *Store) NeedsDirectoryImport() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.data.DirectorySelectionSaved && s.data.LastDirectory == "" && len(s.data.Directories) == 0
+}
+
 // ImportDirectory preserves the last path even if the drive is currently offline.
 func (s *Store) ImportDirectory(root string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if root == "" || s.data.LastDirectory != "" {
+	if root == "" || s.data.DirectorySelectionSaved || s.data.LastDirectory != "" || len(s.data.Directories) != 0 {
 		return nil
 	}
 	d := s.data
+	d.DirectorySelectionSaved = true
 	d.LastDirectory = root
 	d.Directories = append(slices.Clone(d.Directories), Directory{Path: root})
 	return s.save(d)
@@ -39,6 +46,7 @@ func (s *Store) OpenDirectory(root string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := s.data
+	d.DirectorySelectionSaved = true
 	d.LastDirectory = root
 	d.Directories = slices.Clone(d.Directories)
 	entry := Directory{Path: root, LastOpened: time.Now().UnixMilli()}
@@ -71,6 +79,10 @@ func (s *Store) EditDirectory(root, path, name string) error {
 	}
 	d := s.data
 	d.Directories = slices.Clone(d.Directories)
+	if path != root && d.LastDirectory == root {
+		d.DirectorySelectionSaved = true
+		d.LastDirectory = ""
+	}
 	d.Directories[i].Path = path
 	d.Directories[i].Name = name
 	return s.save(d)
@@ -92,15 +104,21 @@ func (s *Store) PinDirectory(root string, pinned bool) error {
 	return s.save(d)
 }
 
-// RemoveDirectory forgets a history entry without changing the active library.
+// RemoveDirectory forgets the entry and clears the selection if it was active.
 func (s *Store) RemoveDirectory(root string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	i := slices.IndexFunc(s.data.Directories, func(dir Directory) bool { return dir.Path == root })
-	if i < 0 {
+	d := s.data
+	if i < 0 && d.LastDirectory != root {
 		return nil
 	}
-	d := s.data
-	d.Directories = slices.Delete(slices.Clone(d.Directories), i, i+1)
+	d.DirectorySelectionSaved = true
+	if d.LastDirectory == root {
+		d.LastDirectory = ""
+	}
+	if i >= 0 {
+		d.Directories = slices.Delete(slices.Clone(d.Directories), i, i+1)
+	}
 	return s.save(d)
 }

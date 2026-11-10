@@ -36,11 +36,12 @@ type Source struct {
 	Timeline bool   `json:"timeline,omitempty"`
 }
 type disk struct {
-	LastDirectory string                        `json:"lastDirectory,omitempty"`
-	Directories   []Directory                   `json:"directories,omitempty"`
-	Preferences   Preferences                   `json:"preferences"`
-	Bindings      map[string]map[string]Contact `json:"bindings"`
-	Sources       map[string]Source             `json:"sources"`
+	DirectorySelectionSaved bool                          `json:"directorySelectionSaved,omitempty"`
+	LastDirectory           string                        `json:"lastDirectory,omitempty"`
+	Directories             []Directory                   `json:"directories,omitempty"`
+	Preferences             Preferences                   `json:"preferences"`
+	Bindings                map[string]map[string]Contact `json:"bindings"`
+	Sources                 map[string]Source             `json:"sources"`
 }
 type Store struct {
 	mu   sync.Mutex
