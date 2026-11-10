@@ -1,9 +1,10 @@
 import {getLocale} from './i18n.js';
+import {TimelineRail} from './timeline-rail.js';
 
 const groupHeight=64;
 // Viewport-only DOM. Grid cards keep their natural height; row offsets follow measured content.
 export class VirtualList {
- constructor(scroller,root,paint,onEnd){
+ constructor(scroller,root,paint,onEnd,timelineRoot,formatSize){
   Object.assign(this,{scroller,root,paint,onEnd,rows:[],groups:[],key:'',heights:new Map()});
   this.sticky=document.createElement('div');
   this.sticky.className='time-group-sticky';
@@ -13,9 +14,55 @@ export class VirtualList {
   this.stickyLabel.className='time-group';
   this.sticky.append(this.stickyLabel);
   root.before(this.sticky);
+  this.timeline=new TimelineRail(timelineRoot,formatSize,group=>this.jumpToGroup(group));
+  this.jumpFrame=0;
   let frame;
   const schedule=()=>{if(frame)return;frame=requestAnimationFrame(()=>{frame=0;this.draw()})};
-  scroller.addEventListener('scroll',schedule,{passive:true});this.observer=new ResizeObserver(()=>{this.rebuild();schedule()});this.observer.observe(scroller);
+  scroller.addEventListener('scroll',()=>{if(!this.jumpFrame)schedule()},{passive:true});
+  for(const event of ['wheel','pointerdown'])scroller.addEventListener(event,()=>this.stopJump(),{passive:true});
+  this.observer=new ResizeObserver(()=>{this.rebuild();schedule()});this.observer.observe(scroller);
+ }
+ stopJump(){
+  cancelAnimationFrame(this.jumpFrame);
+  this.jumpFrame=0;
+ }
+ viewportTop(){
+  return this.scroller.getBoundingClientRect().top+this.scroller.clientTop-this.root.getBoundingClientRect().top;
+ }
+ jumpToGroup(group){
+  this.stopJump();
+  const index=this.groups.indexOf(group);
+  const start=this.scroller.scrollTop;
+  const destination=heading=>Math.max(0,Math.min(
+   this.scroller.scrollHeight-this.scroller.clientHeight,
+   this.scroller.scrollTop+heading.top-this.viewportTop()
+  ));
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+   this.scroller.scrollTop=destination(group);
+   return;
+  }
+  const duration=Math.min(480,240+Math.abs(destination(group)-start)/12);
+  const started=performance.now();
+  const step=now=>{
+   const target=this.groups[index];
+   if(this.root.hidden||!this.options.stickyGroups||target?.day!==group.day){
+    this.stopJump();
+    return;
+   }
+   // Virtual rows can change height as they are painted. Resolve the date again each frame.
+   const progress=Math.min(1,(now-started)/duration);
+   const eased=1-(1-progress)**3;
+   this.scroller.scrollTop=start+(destination(target)-start)*eased;
+   this.draw();
+   if(progress<1){
+    this.jumpFrame=requestAnimationFrame(step);
+   }else{
+    this.scroller.scrollTop=destination(this.groups[index]);
+    this.jumpFrame=0;
+    this.draw();
+   }
+  };
+  this.jumpFrame=requestAnimationFrame(step);
  }
  set(items,options){
   this.items=items;this.options=options;
@@ -38,35 +85,49 @@ export class VirtualList {
     const nextDay=date.getFullYear()*10000+(date.getMonth()+1)*100+date.getDate();
     if(nextDay!==dayKey){
      flush();dayKey=nextDay;
-     const heading={label:formatter.format(date),top,height:groupHeight};
+     const heading={day:nextDay,label:formatter.format(date),top,height:groupHeight,count:0,bytes:0};
      this.rows.push(heading);this.groups.push(heading);top+=groupHeight;
     }
+    const heading=this.groups.at(-1);
+    heading.count++;
+    heading.bytes+=item.size;
    }
    bucket.push(item);if(bucket.length===this.columns)flush();
   }
   flush();this.contentHeight=top;this.root.style.height=top+'px';this.key='';
+  this.timeline.setGroups(this.options.stickyGroups?this.groups:[],this.options.partialGroup);
  }
  drawSticky(top){
   if(!this.options.stickyGroups||!this.groups.length||top<=0||top>=this.contentHeight){
    this.sticky.hidden=true;return;
   }
-  // Locate the active heading even when its row has left the virtual window.
-  let lo=0,hi=this.groups.length;
-  while(lo<hi){
-   const mid=(lo+hi)>>1;
-   if(this.groups[mid].top<=top)lo=mid+1;else hi=mid;
-  }
-  const heading=this.groups[lo-1];
-  const nextTop=this.groups[lo]?.top??this.contentHeight;
+  const index=this.groupAt(top);
+  const heading=this.groups[index];
+  const nextTop=this.groups[index+1]?.top??this.contentHeight;
   if(this.stickyLabel.textContent!==heading.label)this.stickyLabel.textContent=heading.label;
   this.stickyLabel.style.transform=`translateY(${Math.min(0,nextTop-top-groupHeight)}px)`;
   this.sticky.hidden=false;
  }
+ groupAt(top,inclusive=true){
+  let lo=0,hi=this.groups.length;
+  while(lo<hi){
+   const mid=(lo+hi)>>1;
+   const position=this.groups[mid].top;
+   if(position<top||(inclusive&&position===top))lo=mid+1;else hi=mid;
+  }
+  return lo-1;
+ }
  draw(){
   if(!this.options||this.root.hidden||!this.scroller.clientHeight)return;
-  const viewportTop=this.scroller.getBoundingClientRect().top+this.scroller.clientTop-this.root.getBoundingClientRect().top;
+  const viewportTop=this.viewportTop();
   const top=Math.max(0,viewportTop),bottom=top+this.scroller.clientHeight;
   this.drawSticky(viewportTop);
+  if(this.options.stickyGroups){
+   const visibleBottom=viewportTop+this.scroller.clientHeight;
+   const first=visibleBottom>0&&viewportTop<this.contentHeight?this.groupAt(top):-1;
+   const end=first<0?first:this.groupAt(visibleBottom,false);
+   this.timeline.showVisible(first,end);
+  }
   let lo=0,hi=this.rows.length;while(lo<hi){const mid=(lo+hi)>>1;if(this.rows[mid].top+this.rows[mid].height<top-350)lo=mid+1;else hi=mid}
   let end=lo;while(end<this.rows.length&&this.rows[end].top<bottom+350)end++;
   const key=lo+':'+end;
@@ -81,7 +142,7 @@ export class VirtualList {
    }
    let changed=false;
    for(const {node,item} of measure){const key=this.itemKey(item),height=Math.ceil(node.getBoundingClientRect().height);if(height&&this.heights.get(key)!==height){this.heights.set(key,height);changed=true}}
-   if(changed){const anchor=this.rows.find(r=>r.items&&r.top+r.height>top),id=anchor?.items[0];this.rebuild();if(id&&anchor.top<top){const next=this.rows.find(r=>r.items?.[0]===id);if(next)this.scroller.scrollTop+=next.top-anchor.top}this.draw();return}
+   if(changed){const anchor=this.rows.find(r=>r.items&&r.top+r.height>top),id=anchor?.items[0];this.rebuild();if(!this.jumpFrame&&id&&anchor.top<top){const next=this.rows.find(r=>r.items?.[0]===id);if(next)this.scroller.scrollTop+=next.top-anchor.top}this.draw();return}
   }
   if(bottom+600>=parseFloat(this.root.style.height))this.onEnd();
  }

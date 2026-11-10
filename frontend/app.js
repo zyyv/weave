@@ -380,7 +380,7 @@ let itemIndex=new Map(),loadingMore=false,loadFailed=false,requestParams='',list
 let resultKey='',requestKey='',catalogIndexing=false,scanToast;
 const menuPages=new Map();
 $('#catalogLoadingMark').append(loadingMark());
-const virtual=new VirtualList($('#resourceScroll'),$('#items'),paint,()=>loadMore());
+const virtual=new VirtualList($('#resourceScroll'),$('#items'),paint,()=>loadMore(),$('#timelineRail'),compactBytes);
 function emptyFolderView(){return state.root&&(browseFolders()||folder)&&!kind&&!star&&!$('#search').value}
 function emptyState(){
  if(browseTimeline()&&hasDateRange())return ['timelineNoMatchingDates','timelineTryDifferentDates','timelineClearDates',()=>applyDateRange('','')];
@@ -408,7 +408,7 @@ function render(){
  if(resultMode!==resultEndpoint()||resultKey!==requestKey)return;
  renderEmpty();
  itemIndex=new Map(result.items.map(x=>[x.id,x]));
- virtual.set(result.items,{scopes:isScopes(),list:!isScopes()&&prefs.view==='list',compact:prefs.density==='compact',group:browseTimeline()||isWechat()&&!!scope,stickyGroups:browseTimeline()});
+ virtual.set(result.items,{scopes:isScopes(),list:!isScopes()&&prefs.view==='list',compact:prefs.density==='compact',group:browseTimeline()||isWechat()&&!!scope,stickyGroups:browseTimeline(),partialGroup:result.items.length<result.total});
  header();syncSelects();selection();
 }
 function setListLoading(label){

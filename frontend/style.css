@@ -614,3 +614,47 @@ html[data-theme=light]{--privacy-error:#a42b24}
  #timelineMonths{grid-template-columns:minmax(0,1fr)}
  .timeline-month:nth-child(2){display:none}
 }
+
+.library-results{position:relative;display:flex;flex:1;min-height:0;--resource-inset:32px}
+.library-results>.resources-scroll{min-width:0;padding-inline:var(--resource-inset)}
+.timeline-rail{
+ position:absolute;inset:0 auto 0 0;z-index:3;width:var(--resource-inset);
+ display:flex;align-items:center;pointer-events:none;
+}
+.library-results:has(#items[hidden],#catalogLoading:not([hidden]))>.timeline-rail{visibility:hidden}
+.timeline-ticks{
+ position:relative;width:100%;max-height:calc(100% - 24px);padding:3px 4px 3px 6px;
+ overflow:auto;scrollbar-width:none;pointer-events:auto;
+ mask-image:linear-gradient(transparent,#000 6px,#000 calc(100% - 6px),transparent);
+}
+.timeline-ticks::-webkit-scrollbar{display:none}
+.timeline-ticks button{
+ display:flex;justify-content:flex-start;width:100%;height:14px;padding:0;border-radius:4px;
+}
+.timeline-ticks button::before{
+ content:'';width:8px;height:3px;border-radius:1px;background:var(--muted);opacity:.36;
+ transition:width 180ms cubic-bezier(.2,.75,.25,1),opacity 160ms ease,background-color 160ms ease;
+}
+.timeline-ticks button.in-viewport::before{opacity:1;background:var(--secondary)}
+.timeline-ticks button:has(+ button:is(:hover,:focus-visible))::before,
+.timeline-ticks button:is(:hover,:focus-visible)+button::before{width:65%;opacity:.65}
+.timeline-ticks button:is(:hover,:focus-visible)::before{width:100%;opacity:1;background:var(--text)}
+.timeline-ticks button:focus-visible{outline-offset:-2px}
+.timeline-node-preview{
+ position:absolute;left:calc(100% + 4px);top:50%;width:max-content;max-width:min(220px,65vw);
+ display:grid;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+ background:var(--raised);box-shadow:0 6px 22px #0002;
+ opacity:0;transform:translate(-6px,-50%);
+ transition:opacity 150ms ease,transform 180ms cubic-bezier(.2,.75,.25,1);
+}
+.timeline-node-preview.visible{opacity:1;transform:translate(0,-50%)}
+.timeline-node-preview strong{font-size:13px;font-weight:600}
+.timeline-node-preview span{color:var(--secondary);font-size:12px}
+@media(max-width:1100px){.library-results{--resource-inset:24px}}
+@media(max-width:720px){
+ .library-results{--resource-inset:16px}
+ .timeline-ticks{padding-inline:2px}
+}
+@media(prefers-reduced-motion:reduce){
+ .timeline-ticks button::before,.timeline-node-preview{transition:none}
+}
