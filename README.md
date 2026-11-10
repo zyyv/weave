@@ -36,9 +36,11 @@ Requires macOS 12 or later. Choose a package matching your Mac: `arm64` for Appl
 
 1. Download and open the `.dmg` from [GitHub Releases](https://github.com/zyyv/weave/releases).
 2. Drag **Weave.app** into **Applications**, then launch Weave from Applications. Eject the disk image after installation. Alternatively, download the ZIP, extract it, and move Weave.app into Applications.
-3. If macOS blocks the first launch, after attempting to open the app, go to **System Settings → Privacy & Security → Open Anyway**, authenticate if prompted, and confirm opening it. On older macOS versions, use **System Preferences → Security & Privacy → General**. macOS saves an exception for this app, so subsequent launches normally work directly.
 
-**The current build uses only a local ad-hoc signature. It has no Apple Developer ID signature and is not notarized by Apple.** Only allow an app whose source you trust and which has not been tampered with; see [Apple's instructions](https://support.apple.com/en-us/102445). If macOS reports that the app is damaged or contains malware, stop installation, download it again, and report the exact message instead of treating it as an ordinary unidentified-developer warning.
+> [!NOTE]
+> The current build uses an ad-hoc signature and ships without Apple notarization. If macOS blocks Weave after you first try opening it from **Applications**, confirm you downloaded it from the official release, then go to **System Settings → Privacy & Security → Open Anyway**. Authenticate if prompted and confirm that you want to open Weave. On macOS 12, look under **System Preferences → Security & Privacy → General**.
+>
+> If macOS reports that Weave is damaged or contains malware, stop installation and check the download. [Apple’s instructions](https://support.apple.com/en-us/102445)
 
 ## Local data and limitations
 
@@ -99,4 +101,6 @@ Media dependencies are bundled locally. The SILK module and WebAssembly files ar
 
 ## License
 
-Weave is licensed under the [MIT License](LICENSE). See Credits above for third-party licenses and notices.
+Weave is licensed under the [Apache License 2.0](LICENSE). See Credits above for third-party licenses and notices.
+
+Copyright (c) 2026 Chris (zyyv)

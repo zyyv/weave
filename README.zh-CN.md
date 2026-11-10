@@ -36,9 +36,11 @@ Weave 是一款 macOS 本地资源浏览器。它能识别普通文件夹和微�
 
 1. 从[GitHub Releases](https://github.com/zyyv/weave/releases) 下载 `.dmg` 文件并打开。
 2. 将 **Weave.app** 拖入 **Applications（应用程序）**，从「应用程序」中启动 Weave，安装完成后推出磁盘映像。也可下载 ZIP，解压后将 Weave.app 放入「应用程序」。
-3. 如果首次启动被拦截，在尝试打开后，前往 **系统设置 → 隐私与安全性 → 仍要打开**，按提示验证身份并确认打开。旧版 macOS 的入口为「系统偏好设置 → 安全性与隐私 → 通用」。系统会将此 App 保存为例外，之后通常可以直接打开。
 
-**注意：当前版本仅使用本地 ad-hoc 签名，没有 Apple Developer ID 签名，也未通过 Apple 公证。** 手动放行仅适用于你确认来源可信且未被篡改的安装包；步骤见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。如果提示「App 已损坏」或包含恶意软件，请先停止安装、重新下载并反馈具体提示，不要直接当作普通的开发者身份提示处理。
+> [!NOTE]
+> 当前版本采用临时签名（ad-hoc），尚未通过 Apple 公证。将 Weave 移到「应用程序」并尝试打开后，如果 macOS 拦截了启动，请先确认安装包来自官方发布页，再前往 **系统设置 → 隐私与安全性 → 仍要打开**，按提示验证身份并确认打开。macOS 12 的入口是 **系统偏好设置 → 安全性与隐私 → 通用**。
+>
+> 如果 macOS 提示 Weave 已损坏或包含恶意软件，请先停止安装并核对下载文件。[Apple 官方说明](https://support.apple.com/zh-cn/102445)
 
 ## 本地数据与限制
 
@@ -99,4 +101,6 @@ npm ci
 
 ## 许可证
 
-Weave 采用 [MIT 许可证](LICENSE)。第三方组件的许可证和声明见上方 Credits。
+Weave 采用 [Apache 2.0 许可证](LICENSE)。第三方组件的许可证和声明见上方 Credits。
+
+Copyright (c) 2026 Chris (zyyv)
