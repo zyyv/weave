@@ -56,10 +56,8 @@ func (l *Library) Browse(q Query, folder string) Result {
 	if q.Private && !l.vaultAuthorized(q.VaultToken) {
 		return r
 	}
-	if folder != "" {
-		if _, ok := l.folders[folder]; !ok || !l.folderVisible(folder, q.Private) {
-			return r
-		}
+	if r.FolderFallback = l.folderFallback(folder, q.Private); r.FolderFallback != nil {
+		return r
 	}
 	r.FolderPrivateEntry = q.Private && l.vault.records[l.state.Root].Paths[folder]
 	entries := []Item{}
@@ -114,6 +112,21 @@ func (l *Library) Browse(q Query, folder string) Result {
 		r.Items = entries[start:min(start+limit, r.Total)]
 	}
 	return r
+}
+
+// folderFallback returns the nearest visible ancestor when the requested folder is unavailable.
+func (l *Library) folderFallback(folder string, private bool) *string {
+	candidate := folder
+	for candidate != "" {
+		if _, ok := l.folders[candidate]; ok && l.folderVisible(candidate, private) {
+			break
+		}
+		candidate = candidate[:max(0, strings.LastIndexByte(candidate, '/'))]
+	}
+	if candidate == folder {
+		return nil
+	}
+	return &candidate
 }
 
 func (l *Library) folderVisible(rel string, private bool) bool {

@@ -336,6 +336,24 @@ func main() {
 				} else if action == "browse" {
 					jsonOut(lib.Browse(query, q.Get("folder")))
 				} else {
+					query.Folder = q.Get("folder")
+					for _, bound := range []struct {
+						name string
+						dest **int64
+					}{{"modifiedFrom", &query.ModifiedFrom}, {"modifiedBefore", &query.ModifiedBefore}} {
+						if raw := q.Get(bound.name); raw != "" {
+							value, err := strconv.ParseInt(raw, 10, 64)
+							if err != nil {
+								fail(fmt.Errorf("%s", message("errors.invalidDateRange")))
+								return
+							}
+							*bound.dest = &value
+						}
+					}
+					if query.ModifiedFrom != nil && query.ModifiedBefore != nil && *query.ModifiedFrom >= *query.ModifiedBefore {
+						fail(fmt.Errorf("%s", message("errors.invalidDateRange")))
+						return
+					}
 					jsonOut(lib.List(query))
 				}
 			case "scan":

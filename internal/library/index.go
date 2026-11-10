@@ -138,10 +138,11 @@ func (l *Library) query(q Query) queryResult {
 		names = nil
 	}
 	keyBytes, _ := json.Marshal(struct {
-		Search, Kind, Group, Sort string
-		Thumbs, Star, Private     bool
-		Names                     map[string]string
-	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Thumbs, q.Star, q.Private, names})
+		Search, Kind, Group, Sort, Folder string
+		ModifiedFrom, ModifiedBefore      *int64
+		Thumbs, Star, Private             bool
+		Names                             map[string]string
+	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Folder, q.ModifiedFrom, q.ModifiedBefore, q.Thumbs, q.Star, q.Private, names})
 	key := string(keyBytes)
 	l.cache.mu.Lock()
 	cached, ok := l.cache.values[key]
@@ -151,8 +152,16 @@ func (l *Library) query(q Query) queryResult {
 	}
 	kinds, search := kindsFor(q.Kind), strings.ToLower(q.Search)
 	r := queryResult{indices: []int{}}
+	folderPrefix := q.Folder + "/"
 	for _, i := range l.candidates(q) {
 		x := l.items[i]
+		if q.Folder != "" && x.Folder != q.Folder && !strings.HasPrefix(x.Folder, folderPrefix) {
+			continue
+		}
+		if (q.ModifiedFrom != nil && x.Modified < *q.ModifiedFrom) ||
+			(q.ModifiedBefore != nil && x.Modified >= *q.ModifiedBefore) {
+			continue
+		}
 		if l.visible(x.ID, q.Private) && matches(x, l.marks[x.ID], q, kinds, search) {
 			r.indices = append(r.indices, i)
 			r.bytes += x.Size

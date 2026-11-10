@@ -59,10 +59,10 @@ func TestFolderBrowsing(t *testing.T) {
 	if r.Total != 2 || r.Items[0].Name != "nested" || r.Items[1].Folder != "projects" {
 		t.Fatalf("nested: %+v", r)
 	}
-	if r = l.Browse(Query{}, "empty"); r.Total != 0 {
-		t.Fatal("empty folder contains resources")
+	if r = l.Browse(Query{Kind: "image"}, "empty"); r.Total != 0 || r.FolderFallback != nil {
+		t.Fatalf("empty folder should remain available: %+v", r)
 	}
-	if r = l.Browse(Query{}, "../"); r.Total != 0 {
+	if r = l.Browse(Query{}, "../"); r.Total != 0 || r.FolderFallback == nil || *r.FolderFallback != "" {
 		t.Fatal("out-of-root folder accepted")
 	}
 	if r = l.Browse(Query{Kind: "image"}, ""); r.Total != 1 || r.Items[0].Name != "projects" {
@@ -79,5 +79,29 @@ func TestFolderBrowsing(t *testing.T) {
 	}
 	if r = l.List(Query{}); r.Total != 3 {
 		t.Fatalf("flat listing includes directories: %+v", r)
+	}
+	if r = l.List(Query{Folder: "projects", Sort: "name", Limit: 1}); r.Total != 2 || r.FileCount != 2 || r.Bytes != 12 || len(r.Items) != 1 || r.Items[0].Name != "notes.txt" {
+		t.Fatalf("flat listing in projects: %+v", r)
+	}
+	if r = l.List(Query{Folder: "projects", Sort: "name", Offset: 1, Limit: 1}); r.Total != 2 || len(r.Items) != 1 || r.Items[0].Name != "photo.jpg" {
+		t.Fatalf("flat listing includes descendant files: %+v", r)
+	}
+	if r = l.List(Query{Folder: "empty"}); r.Total != 0 || r.FolderFallback != nil {
+		t.Fatalf("flat listing should preserve an empty directory: %+v", r)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "projects/nested")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Scan(root); err != nil {
+		t.Fatal(err)
+	}
+	waitScan(t, l)
+	r = l.Browse(Query{Kind: "image"}, "projects/nested")
+	if r.FolderFallback == nil || *r.FolderFallback != "projects" {
+		t.Fatalf("removed folder should fall back to its nearest existing parent: %+v", r)
+	}
+	r = l.List(Query{Folder: "projects/nested"})
+	if r.FolderFallback == nil || *r.FolderFallback != "projects" {
+		t.Fatalf("flat listing should also fall back after a folder is removed: %+v", r)
 	}
 }

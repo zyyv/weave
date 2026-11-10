@@ -315,19 +315,21 @@ func (l *Library) Status(tokens ...string) Status {
 }
 
 type Query struct {
-	Search, Kind, Group, Sort string
-	Names                     map[string]string
-	Thumbs, Star              bool
-	Offset, Limit             int
-	Private                   bool
-	VaultToken                string
+	Search, Kind, Group, Sort, Folder string
+	ModifiedFrom, ModifiedBefore      *int64 // Milliseconds since epoch, inclusive start and exclusive end.
+	Names                             map[string]string
+	Thumbs, Star                      bool
+	Offset, Limit                     int
+	Private                           bool
+	VaultToken                        string
 }
 type Result struct {
-	Items              []Item `json:"items"`
-	Total              int    `json:"total"`
-	Bytes              int64  `json:"bytes"`
-	FileCount          int    `json:"fileCount"`
-	FolderPrivateEntry bool   `json:"folderPrivateEntry,omitempty"`
+	Items              []Item  `json:"items"`
+	Total              int     `json:"total"`
+	Bytes              int64   `json:"bytes"`
+	FileCount          int     `json:"fileCount"`
+	FolderPrivateEntry bool    `json:"folderPrivateEntry,omitempty"`
+	FolderFallback     *string `json:"folderFallback,omitempty"`
 }
 
 func (l *Library) List(q Query) Result {
@@ -336,8 +338,12 @@ func (l *Library) List(q Query) Result {
 	if q.Private && !l.vaultAuthorized(q.VaultToken) {
 		return Result{Items: []Item{}}
 	}
+	r := Result{Items: []Item{}}
+	if r.FolderFallback = l.folderFallback(q.Folder, q.Private); r.FolderFallback != nil {
+		return r
+	}
 	matches := l.query(q)
-	r := Result{Items: []Item{}, Total: len(matches.indices), FileCount: len(matches.indices), Bytes: matches.bytes}
+	r.Total, r.FileCount, r.Bytes = len(matches.indices), len(matches.indices), matches.bytes
 	if q.Limit <= 0 || q.Limit > 200 {
 		q.Limit = 80
 	}

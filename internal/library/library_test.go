@@ -235,6 +235,51 @@ func TestIndexedSortFiltersAndInvalidation(t *testing.T) {
 	}
 }
 
+func TestListModifiedDateRange(t *testing.T) {
+	root := t.TempDir()
+	start := time.Date(2025, 3, 9, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 1)
+	for name, modified := range map[string]time.Time{
+		"before.txt": start.Add(-time.Millisecond),
+		"start.txt":  start,
+		"last.txt":   end.Add(-time.Millisecond),
+		"end.txt":    end,
+	} {
+		file := filepath.Join(root, name)
+		if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(file, modified, modified); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lib, err := New(root, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lib.Scan(root); err != nil {
+		t.Fatal(err)
+	}
+	waitScan(t, lib)
+
+	from, before := start.UnixMilli(), end.UnixMilli()
+	query := Query{ModifiedFrom: &from, ModifiedBefore: &before, Limit: 1}
+	got := lib.List(query)
+	if got.Total != 2 || got.Bytes != 2 || len(got.Items) != 1 || got.Items[0].Name != "last.txt" {
+		t.Fatalf("first filtered page: %+v", got)
+	}
+	query.Offset = 1
+	got = lib.List(query)
+	if got.Total != 2 || len(got.Items) != 1 || got.Items[0].Name != "start.txt" {
+		t.Fatalf("second filtered page: %+v", got)
+	}
+	query.Offset, query.ModifiedBefore = 0, nil
+	got = lib.List(query)
+	if got.Total != 3 || len(got.Items) != 1 || got.Items[0].Name != "end.txt" {
+		t.Fatalf("open-ended range: %+v", got)
+	}
+}
+
 func BenchmarkScopeSizeMetadata(b *testing.B) {
 	lib := &Library{marks: map[string]Mark{}}
 	for i := 0; i < 160000; i++ {
