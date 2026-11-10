@@ -43,7 +43,7 @@ async function travel(step){
  kind=route.kind;star=route.star;scope=route.scope;folder=route.folder||'';dateRange=route.dateRange;scopeKinds=route.scopeKinds||[];offset=route.offset;$('#search').value=route.search;
  const changed=['sort','thumbs','view'].some(k=>prefs[k]!==route[k]);for(const k of ['sort','thumbs','view'])prefs[k]=route[k];applyTheme();if(changed)persistPrefs();$('#group').value=scope;
  if(route.page==='settings'){page='settings';$('#libraryPage').hidden=true;$('#settingsPage').hidden=false;settingsUI.open(route.settings.tab,route.settings.hash);$('#settingsPage').scrollTop=route.scroll;header();load()}
- else{showLibrary();header();await load({scrollTop:route.scroll})}
+ else{showLibrary();header();await load({scrollTop:route.scroll,reusePage:true})}
  document.body.classList.remove('mobile-nav');applyTheme();setupTour?.refresh();
 }
 $('#navigateBack').onclick=()=>travel(-1);$('#navigateForward').onclick=()=>travel(1);
@@ -182,7 +182,18 @@ async function action(fn){try{await fn()}catch(e){toast(e.message,'error')}}
 function color(el,k){el.style.setProperty('--kind-color',`var(--${k})`)}
 function applyTheme(){const history=$('.history-controls');if(innerWidth<=720||prefs.sidebarCollapsed){if(history.parentElement!==$('.topbar'))$('.topbar').insertBefore(history,$('#expand'))}else if(history.parentElement!==$('.sidebar-tools'))$('.sidebar-tools').insertBefore(history,$('#collapse'));const root=document.documentElement;root.dataset.theme=prefs.theme==='system'?(systemTheme.matches?'dark':'light'):prefs.theme;root.dataset.palette=prefs.palette;root.dataset.typeColors=prefs.typeColors?'on':'off';document.body.dataset.density=prefs.density;document.body.classList.toggle('collapsed',prefs.sidebarCollapsed);$('#sidebar').inert=innerWidth<=720?!document.body.classList.contains('mobile-nav'):prefs.sidebarCollapsed;$('#collapse').setAttribute('aria-expanded',String(!prefs.sidebarCollapsed));$('#expand').setAttribute('aria-expanded',String(!prefs.sidebarCollapsed));syncGroupingControls();syncSelects();renderNavStats();$('#gridView').classList.toggle('active',prefs.view==='grid');$('#listView').classList.toggle('active',prefs.view==='list')}
 function persistPrefs(){clearTimeout(saveTimer);$('#settingsState').textContent=t('saving');saveTimer=setTimeout(()=>{const value={...prefs};saveChain=saveChain.catch(()=>{}).then(()=>api('settings',value)).then(()=>{$('#settingsState').textContent=t('saved')}).catch(e=>{$('#settingsState').textContent=t('saveFailed');toast(t('couldNotSaveSettings')+e.message,'error')})},180)}
-function setPref(k,v){prefs[k]=v;if(k==='locale'){applyLocale();persistPrefs();return}if(k==='volume'||k==='speed'){persistPrefs();return}applyTheme();persistPrefs();if(['thumbs','sort','view'].includes(k)){offset=0;load()}else if(k==='density')render()}
+function setPref(k,v){
+ if(k==='view'&&prefs.view===v)return;
+ prefs[k]=v;
+ if(k==='locale'){applyLocale();persistPrefs();return}
+ if(k==='volume'||k==='speed'){persistPrefs();return}
+ applyTheme();persistPrefs();
+ if(k==='thumbs'||k==='sort'){offset=0;load()}
+ else if(k==='view'&&!isScopes()){
+  $('#resourceScroll').scrollTop=0;
+  render();
+ }else if(k==='density')render();
+}
 systemTheme.addEventListener('change',applyTheme);window.addEventListener('resize',applyTheme);
 function isWechat(){return !inVault&&(source.mode==='auto'?(state.detectedMode||'folder'):source.mode)==='wechat'}
 function groupingMode(){return source.timeline?'timeline':source.grouped?'grouped':'flat'}
@@ -343,7 +354,7 @@ function fallback(node,x){node.innerHTML=fileCover(x)}
 function retryThumbnail(img,id,modified){if(img.dataset.retried||img.getAttribute('src')===`thumb/${id}?v=${modified}&thumb=2`)return false;img.dataset.retried='true';img.src=`thumb/${id}?v=${modified}&thumb=2`;return true}
 function scopeCover(cover){
  if(!cover)return `<span>${icon(kindIcon(kind||'folder'))}</span>`;
- const image=cover.preview?`<img src="thumb/${esc(cover.preview)}?v=${cover.modified}&thumb=2" decoding="async" alt="" loading="eager">`:cover.kind==='video'?`<img data-video="${esc(cover.id)}" alt="" aria-hidden="true">`:icon('image');
+ const image=cover.preview?`<img src="thumb/${esc(cover.preview)}?v=${cover.modified}&thumb=2" decoding="async" alt="" loading="lazy">`:cover.kind==='video'?`<img data-video="${esc(cover.id)}" alt="" aria-hidden="true">`:icon('image');
  return `<span data-cover-kind="${esc(cover.kind)}" data-cover-id="${esc(cover.id)}" data-cover-modified="${cover.modified}">${image}</span>`;
 }
 // Keep overlapping cards attached so scrolling does not restart image decoding or video covers.
@@ -363,11 +374,21 @@ function reconcileCards(items,markups,scopes){
  let cursor=root.firstElementChild;
  for(const node of nodes){if(node===cursor)cursor=cursor.nextElementSibling;else root.insertBefore(node,cursor)}
 }
+let coverDateLocale,coverDateFormats;
 function paint(visible){
  if(resultMode!==resultEndpoint())return;
+ const locale=getLocale();
+ if(coverDateLocale!==locale){
+  coverDateLocale=locale;
+  coverDateFormats={
+   short:new Intl.DateTimeFormat(locale,{month:'2-digit',day:'2-digit'}),
+   date:new Intl.DateTimeFormat(locale),
+   time:new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  };
+ }
  const scopes=isScopes();$('#items').className=scopes?'scopes':prefs.view;
- if(scopes){reconcileCards(visible,visible.map(g=>`<article class="scope-card" data-scope="${esc(g.hash)}"><div class="scope-head"><span class="avatar">${g.hash==='未分组'?icon('folder'):contactAvatar(g.hash)}</span><button class="scope-identity" title="${t('openConversation')}"><strong>${esc(contactName(g.hash))}</strong><small>${contacts[g.hash]?esc(contacts[g.hash].type==='group'?t('groupChat'):contacts[g.hash].type==='person'?t('contact'):t('customGroup'))+' · ':''}${g.hash==='未分组'?'':esc(g.hash.slice(0,12))+'…'}</small></button><button ${g.hash==='未分组'?'hidden':''} class="icon scope-bind" aria-label="${t('bindOrEditConversation')}" title="${t('bindOrEditConversation')}">${icon('edit')}</button></div><button class="scope-covers" style="grid-template-columns:repeat(${Math.max(1,g.covers.length)},minmax(0,1fr))" aria-label="${t('browseResourcesIn', {p6: esc(contactName(g.hash))})}">${(g.covers.length?g.covers:[null]).map(scopeCover).join('')}</button><div class="scope-footer"><span>${t('resources', {p8: g.count.toLocaleString(), p9: bytes(g.bytes)})}</span><span>${new Date(g.modified).toLocaleDateString(getLocale(),{month:'2-digit',day:'2-digit'})}</span></div><div class="scope-types">${Object.entries(g.counts).map(([k,n])=>`<span data-type="${k}">${icon(kindIcon(k))}${n.toLocaleString()}</span>`).join('')}</div></article>`),true);$$('[data-scope]').forEach(e=>{const hash=e.dataset.scope;e.querySelectorAll('.scope-identity,.scope-covers').forEach(b=>b.onclick=()=>enterScope(hash));e.querySelector('.scope-bind').onclick=()=>showSettings('bindings',hash);e.querySelectorAll('img:not([data-video])').forEach(img=>img.onerror=()=>{const slot=img.parentElement;if(slot.dataset.coverKind==='video'){img.removeAttribute('src');img.dataset.video=slot.dataset.coverId;observeVideoCovers(e)}else if(!retryThumbnail(img,slot.dataset.coverId,slot.dataset.coverModified))slot.innerHTML=icon('image')});e.querySelectorAll('[data-type]').forEach(el=>color(el,el.dataset.type))})}
- else{reconcileCards(visible,visible.map(x=>x.directory?`<article class="asset directory" data-folder="${esc([x.folder,x.name].filter(Boolean).join('/'))}"><button class="cover folder-cover" aria-label="${t('openFolder',{name:esc(x.name)})}">${icon('folder')}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta">${t('folder')}</div><div class="asset-context">${t('folder')}</div></article>`:`<article class="asset" data-id="${x.id}"><input type="checkbox" aria-label="${t('select', {p1: esc(x.name)})}"><button class="cover" aria-label="${t('preview', {p2: esc(x.name)})}">${x.kind==='video'&&!x.preview?`<img data-video="${x.id}" alt="" aria-hidden="true">`:x.preview?`<img src="thumb/${x.preview}?v=${x.modified}&thumb=2" decoding="async" loading="eager" alt="">` :fileCover(x)}${x.kind==='video'?`<span class="media-kind">${icon('video')+t('video')}</span>`:''}${isWechat()&&x.thumbnail?`<span class="media-kind">${t('thumbnail')}</span>`:''}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta"><span>${bytes(x.size)}${x.star?icon('star'):''}</span><span>${new Date(x.modified).toLocaleDateString(getLocale(),{month:'2-digit',day:'2-digit'})}</span></div><div class="asset-context"><span title="${esc(fileContext(x))}">${esc(fileContext(x))}</span><span>${esc(x.tags|| (isWechat()&&x.thumbnail?t('thumbnail'):t('originalFile')))}</span></div><div class="asset-format"><strong>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</strong><span>${esc(labels[x.kind]||t('otherFiles'))}</span></div><div class="asset-size">${bytes(x.size)}</div><time class="asset-modified" datetime="${new Date(x.modified).toISOString()}"><span>${new Date(x.modified).toLocaleDateString(getLocale())}</span><span>${new Date(x.modified).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span></time><div class="asset-flags">${x.star?icon('star'):''}${x.tags?icon('tag'):''}</div></article>`),false);$$('.asset:not(.directory)').forEach(e=>{const x=itemIndex.get(e.dataset.id);color(e,x.kind);e.querySelector('input').onchange=ev=>setSelected(x.id,ev.target.checked);e.onclick=ev=>{
+ if(scopes){reconcileCards(visible,visible.map(g=>`<article class="scope-card" data-scope="${esc(g.hash)}"><div class="scope-head"><span class="avatar">${g.hash==='未分组'?icon('folder'):contactAvatar(g.hash)}</span><button class="scope-identity" title="${t('openConversation')}"><strong>${esc(contactName(g.hash))}</strong><small>${contacts[g.hash]?esc(contacts[g.hash].type==='group'?t('groupChat'):contacts[g.hash].type==='person'?t('contact'):t('customGroup'))+' · ':''}${g.hash==='未分组'?'':esc(g.hash.slice(0,12))+'…'}</small></button><button ${g.hash==='未分组'?'hidden':''} class="icon scope-bind" aria-label="${t('bindOrEditConversation')}" title="${t('bindOrEditConversation')}">${icon('edit')}</button></div><button class="scope-covers" style="grid-template-columns:repeat(${Math.max(1,g.covers.length)},minmax(0,1fr))" aria-label="${t('browseResourcesIn', {p6: esc(contactName(g.hash))})}">${(g.covers.length?g.covers:[null]).map(scopeCover).join('')}</button><div class="scope-footer"><span>${t('resources', {p8: g.count.toLocaleString(), p9: bytes(g.bytes)})}</span><span>${coverDateFormats.short.format(g.modified)}</span></div><div class="scope-types">${Object.entries(g.counts).map(([k,n])=>`<span data-type="${k}">${icon(kindIcon(k))}${n.toLocaleString()}</span>`).join('')}</div></article>`),true);$$('[data-scope]').forEach(e=>{const hash=e.dataset.scope;e.querySelectorAll('.scope-identity,.scope-covers').forEach(b=>b.onclick=()=>enterScope(hash));e.querySelector('.scope-bind').onclick=()=>showSettings('bindings',hash);e.querySelectorAll('img:not([data-video])').forEach(img=>img.onerror=()=>{const slot=img.parentElement;if(slot.dataset.coverKind==='video'){img.removeAttribute('src');img.dataset.video=slot.dataset.coverId;observeVideoCovers(e)}else if(!retryThumbnail(img,slot.dataset.coverId,slot.dataset.coverModified))slot.innerHTML=icon('image')});e.querySelectorAll('[data-type]').forEach(el=>color(el,el.dataset.type))})}
+ else{reconcileCards(visible,visible.map(x=>x.directory?`<article class="asset directory" data-folder="${esc([x.folder,x.name].filter(Boolean).join('/'))}"><button class="cover folder-cover" aria-label="${t('openFolder',{name:esc(x.name)})}">${icon('folder')}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta">${t('folder')}</div><div class="asset-context">${t('folder')}</div></article>`:`<article class="asset" data-id="${x.id}"><input type="checkbox" aria-label="${t('select', {p1: esc(x.name)})}"><button class="cover" aria-label="${t('preview', {p2: esc(x.name)})}">${x.kind==='video'&&!x.preview?`<img data-video="${x.id}" alt="" aria-hidden="true">`:x.preview?`<img src="thumb/${x.preview}?v=${x.modified}&thumb=2" decoding="async" loading="lazy" alt="">` :fileCover(x)}${x.kind==='video'?`<span class="media-kind">${icon('video')+t('video')}</span>`:''}${isWechat()&&x.thumbnail?`<span class="media-kind">${t('thumbnail')}</span>`:''}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta"><span>${bytes(x.size)}${x.star?icon('star'):''}</span><span>${coverDateFormats.short.format(x.modified)}</span></div><div class="asset-context"><span title="${esc(fileContext(x))}">${esc(fileContext(x))}</span><span>${esc(x.tags|| (isWechat()&&x.thumbnail?t('thumbnail'):t('originalFile')))}</span></div><div class="asset-format"><strong>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</strong><span>${esc(labels[x.kind]||t('otherFiles'))}</span></div><div class="asset-size">${bytes(x.size)}</div><time class="asset-modified" datetime="${new Date(x.modified).toISOString()}"><span>${coverDateFormats.date.format(x.modified)}</span><span>${coverDateFormats.time.format(x.modified)}</span></time><div class="asset-flags">${x.star?icon('star'):''}${x.tags?icon('tag'):''}</div></article>`),false);$$('.asset:not(.directory)').forEach(e=>{const x=itemIndex.get(e.dataset.id);color(e,x.kind);e.querySelector('input').onchange=ev=>setSelected(x.id,ev.target.checked);e.onclick=ev=>{
   if(ev.target.closest('input'))return;
   if(ev.metaKey||ev.ctrlKey){
    ev.preventDefault();
@@ -378,7 +399,7 @@ function paint(visible){
 }
 let itemIndex=new Map(),loadingMore=false,loadFailed=false,requestParams='',listAbort=null;
 let resultKey='',requestKey='',catalogIndexing=false,scanToast;
-const menuPages=new Map();
+const catalogPages=new Map();
 $('#catalogLoadingMark').append(loadingMark());
 const virtual=new VirtualList($('#resourceScroll'),$('#items'),paint,()=>loadMore(),$('#timelineRail'),compactBytes);
 function emptyFolderView(){return state.root&&(browseFolders()||folder)&&!kind&&!star&&!$('#search').value}
@@ -407,7 +428,6 @@ function renderEmpty(){
 function render(){
  if(resultMode!==resultEndpoint()||resultKey!==requestKey)return;
  renderEmpty();
- itemIndex=new Map(result.items.map(x=>[x.id,x]));
  virtual.set(result.items,{scopes:isScopes(),list:!isScopes()&&prefs.view==='list',compact:prefs.density==='compact',group:browseTimeline()||isWechat()&&!!scope,stickyGroups:browseTimeline(),partialGroup:result.items.length<result.total});
  header();syncSelects();selection();
 }
@@ -427,11 +447,11 @@ function finishListLoading(){
 async function loadMore(){
  if(loadingMore||loadFailed||resultKey!==requestKey||result.items.length>=result.total)return;
  const v=version;loadingMore=true;setListLoading(t('loadingMore'));
- try{const p=new URLSearchParams(requestParams);p.set('offset',result.items.length);const r=await api((resultMode+'?')+p,undefined,listAbort?.signal);if(v!==version)return;if(!r.items.length){loadFailed=true;$('#loadState').textContent=t('theListHasChangedClickToRetry');return}result.items.push(...r.items);render()}
+ try{const p=new URLSearchParams(requestParams);p.set('offset',result.items.length);const r=await api((resultMode+'?')+p,undefined,listAbort?.signal);if(v!==version)return;if(!r.items.length){loadFailed=true;$('#loadState').textContent=t('theListHasChangedClickToRetry');return}result.items.push(...r.items);for(const item of r.items)itemIndex.set(item.id,item);render()}
  catch(e){if(v===version&&e.name!=='AbortError'){loadFailed=true;$('#loadState').textContent=t('couldNotLoadClickToRetry')}}finally{if(v===version){loadingMore=false;finishListLoading();if(!loadFailed){$('#loadState').textContent=result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');virtual.draw()}}}
 }
 $('#loadState').onclick=()=>{if(resultKey!==requestKey||!result.items.length){load();return}loadFailed=false;loadMore()};
-async function load({scrollTop,menu=false}={}){
+async function load({scrollTop,reusePage=false}={}){
  clearTimeout(searchTimer);
  listAbort?.abort();listAbort=new AbortController();const v=++version,endpoint=resultEndpoint();loadingMore=true;loadFailed=false;
  const restore=scrollTop??0;
@@ -446,9 +466,9 @@ async function load({scrollTop,menu=false}={}){
  }
  requestParams=p.toString();
  const key=requestKey=endpoint+'?'+requestParams;
- if(!menu||state.scanning)menuPages.clear();
- const cacheable=!!state.root&&!inVault&&!scope&&!folder&&!p.get('search')&&!restore;
- const cached=cacheable?menuPages.get(key):null;
+ if(!reusePage||state.scanning)catalogPages.clear();
+ const cacheable=!!state.root&&!inVault&&!state.scanning&&!p.get('search');
+ const cached=cacheable?catalogPages.get(key):null;
  if(!cached){
   $('#empty').hidden=true;
   $('#items').hidden=resultKey!==key;
@@ -464,14 +484,16 @@ async function load({scrollTop,menu=false}={}){
   header();
   return load();
  }
- if(cacheable&&!state.scanning&&!cached){
-  if(menuPages.size>=7)menuPages.delete(menuPages.keys().next().value);
-  menuPages.set(key,r);
+ if(cacheable&&!state.scanning){
+  catalogPages.delete(key);
+  if(catalogPages.size>=7)catalogPages.delete(catalogPages.keys().next().value);
+  catalogPages.set(key,r);
  }
  const next={...r,items:[...r.items]};
  // Restore enough metadata before restoring a deep history position.
  while(restore>0&&next.items.length<next.total&&next.items.length<Math.ceil(restore/78)*8+200){p.set('offset',next.items.length);const more=await api((endpoint+'?')+p,undefined,listAbort.signal);if(v!==version)return;if(!more.items.length)break;next.items.push(...more.items)}
  result=next;resultMode=endpoint;
+ itemIndex=new Map(next.items.map(item=>[item.id,item]));
  resultKey=key;
  const reveal=finishCatalogIndex(true);
  $('#items').hidden=false;
@@ -512,7 +534,7 @@ async function syncState(){
   &&(previous.scanning||pendingDirectory?.started||!previous.updated);
  state=next;
  if(scanFinished)catalogIndexing=true;
- if(next.scanning)menuPages.clear();
+ if(next.scanning)catalogPages.clear();
  if(previous.scanning!==next.scanning)renderEmpty();
  if(rootChanged || vaultClosed){
   inVault=false;
@@ -543,9 +565,9 @@ async function syncState(){
 }
 async function poll(){try{await refreshState()}catch(e){$('#notice').textContent=t('couldNotConnectToTheLocalService')+e.message}finally{setTimeout(poll,state.scanning?1000:5000)}}
 function showLibrary(){page='library';$('#libraryPage').hidden=false;$('#settingsPage').hidden=true;document.body.classList.remove('mobile-nav');header()}
-function enterFolder(path){navigate(()=>{if(inVault)selected.clear();folder=path;scope='';offset=0;showLibrary();load()})}
-function enterScope(hash){navigate(()=>{scope=hash;scopeKinds=hash&&kind?[kind]:[];offset=0;$('#group').value=hash;$('#resourceScroll').scrollTop=0;showLibrary();load()})}
-function setView(k,s=false,clearSearch=false){if(inVault)return leaveVault(()=>setView(k,s,clearSearch));navigate(()=>{if(clearSearch)$('#search').value='';kind=k;star=s;scope='';scopeKinds=[];offset=0;$('#group').value='';showLibrary();load({menu:true})})}
+function enterFolder(path){navigate(()=>{if(inVault)selected.clear();folder=path;scope='';offset=0;showLibrary();load({reusePage:true})})}
+function enterScope(hash){navigate(()=>{scope=hash;scopeKinds=hash&&kind?[kind]:[];offset=0;$('#group').value=hash;$('#resourceScroll').scrollTop=0;showLibrary();load({reusePage:true})})}
+function setView(k,s=false,clearSearch=false){if(inVault)return leaveVault(()=>setView(k,s,clearSearch));navigate(()=>{if(clearSearch)$('#search').value='';kind=k;star=s;scope='';scopeKinds=[];offset=0;$('#group').value='';showLibrary();load({reusePage:true})})}
 function showSettings(tab='general',hash=''){if(inVault)return leaveVault(()=>showSettings(tab,hash));navigate(()=>{if($('#detail').open)closeDetail();page='settings';$('#libraryPage').hidden=true;$('#settingsPage').hidden=false;document.body.classList.remove('mobile-nav');header();settingsUI.open(tab,hash);$('#settingsPage').scrollTop=0;setupTour?.refresh()})}
 async function rescan(){
  if(!state.root||state.scanning||sourceBusy||choosingSource)return;
@@ -647,7 +669,7 @@ const privateUI=createPrivateSpace({dialog:$('#vaultDialog'),api});
 
 function clearCatalog(){
  ++version;listAbort?.abort();clearTimeout(searchTimer);
- menuPages.clear();resultKey=requestKey='';
+ catalogPages.clear();resultKey=requestKey='';
  if($('#detail').open)closeDetail();
  selected.clear();result={items:[],total:0};itemIndex.clear();
  resultMode=resultEndpoint();

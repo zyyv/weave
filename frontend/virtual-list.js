@@ -20,7 +20,12 @@ export class VirtualList {
   const schedule=()=>{if(frame)return;frame=requestAnimationFrame(()=>{frame=0;this.draw()})};
   scroller.addEventListener('scroll',()=>{if(!this.jumpFrame)schedule()},{passive:true});
   for(const event of ['wheel','pointerdown'])scroller.addEventListener(event,()=>this.stopJump(),{passive:true});
-  this.observer=new ResizeObserver(()=>{this.rebuild();schedule()});this.observer.observe(scroller);
+  this.observer=new ResizeObserver(()=>{
+   if(!this.options||root.hidden||!scroller.clientHeight)return;
+   if(root.clientWidth!==this.width)this.rebuild();
+   schedule();
+  });
+  this.observer.observe(scroller);
  }
  stopJump(){
   cancelAnimationFrame(this.jumpFrame);
@@ -65,14 +70,16 @@ export class VirtualList {
   this.jumpFrame=requestAnimationFrame(step);
  }
  set(items,options){
+  this.stopJump();
   this.items=items;this.options=options;
   this.scroller.classList.toggle('has-sticky-groups',!!options.stickyGroups);
   this.sticky.hidden=true;
   this.rebuild();this.draw();
  }
- itemKey(item){return `${this.width}:${this.options.compact}:${this.options.scopes}:${item.hash||item.id}`}
+ itemKey(item){return `${this.width}:${this.options.compact}:${this.options.scopes}:${item.hash||(item.directory?JSON.stringify([item.folder,item.name]):item.id)}`}
  rebuild(){
   if(!this.options)return;const {scopes,list,compact,group}=this.options,width=this.root.clientWidth;
+  if(width!==this.width)this.heights.clear();
   this.width=width;
   this.columns=list?1:Math.max(1,Math.floor((width+16)/((scopes?270:compact?130:158)+16)));this.gap=list?0:16;this.height=scopes?(compact?200:228):list?88:compact?175:210;
   this.rows=[];this.groups=[];
@@ -137,11 +144,18 @@ export class VirtualList {
     if(row.label){const h=document.createElement('h2');h.className='time-group';h.textContent=row.label;h.style.top=row.top+'px';this.root.insertBefore(h,nodes[index]||null);continue}
     for(let col=0;col<row.items.length;col++){
      const node=nodes[index++];node.style.position='absolute';node.style.top=row.top+'px';node.style.left=`calc(${col} * (100% + ${this.gap}px) / ${this.columns})`;node.style.width=`calc((100% - ${(this.columns-1)*this.gap}px) / ${this.columns})`;node.style.height=this.options.list?row.height+'px':'auto';
-     if(!this.options.list)measure.push({node,item:row.items[col]});
+     if(!this.options.list)measure.push({node,item:row.items[col],row});
     }
    }
-   let changed=false;
-   for(const {node,item} of measure){const key=this.itemKey(item),height=Math.ceil(node.getBoundingClientRect().height);if(height&&this.heights.get(key)!==height){this.heights.set(key,height);changed=true}}
+   const measuredRows=new Set();
+   for(const {node,item,row} of measure){
+    const key=this.itemKey(item),height=Math.ceil(node.getBoundingClientRect().height);
+    if(height&&this.heights.get(key)!==height){
+     this.heights.set(key,height);
+     measuredRows.add(row);
+    }
+   }
+   const changed=[...measuredRows].some(row=>row.height!==Math.max(...row.items.map(item=>this.heights.get(this.itemKey(item))||this.height)));
    if(changed){const anchor=this.rows.find(r=>r.items&&r.top+r.height>top),id=anchor?.items[0];this.rebuild();if(!this.jumpFrame&&id&&anchor.top<top){const next=this.rows.find(r=>r.items?.[0]===id);if(next)this.scroller.scrollTop+=next.top-anchor.top}this.draw();return}
   }
   if(bottom+600>=parseFloat(this.root.style.height))this.onEnd();

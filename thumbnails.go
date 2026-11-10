@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 	"weave/internal/library"
@@ -33,7 +34,16 @@ func newThumbnailCache() *thumbnailCache {
 func (t *thumbnailCache) get(key string) []byte {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.values[key]
+	data := t.values[key]
+	// Keep recently revisited covers resident when scrolling through a large catalog.
+	if data == nil {
+		return nil
+	}
+	if index := slices.Index(t.keys, key); index >= 0 && index < len(t.keys)-1 {
+		copy(t.keys[index:], t.keys[index+1:])
+		t.keys[len(t.keys)-1] = key
+	}
+	return data
 }
 func (t *thumbnailCache) serve(w http.ResponseWriter, r *http.Request, lib *library.Library, id string) {
 	x, err := lib.Item(id, vaultCookie(r))
