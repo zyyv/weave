@@ -1,3 +1,4 @@
+import {renderUsage} from './usage-overview.js';
 import {t, getLocale, setLocale, translateStatic} from './i18n.js';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 import {icon, iconSvg, renderIcons} from './icons.js';
@@ -36,14 +37,15 @@ let dateRange={start:'',end:''}, searchQuery='';
 const systemTheme=matchMedia('(prefers-color-scheme: dark)');
 const navigation=new NavigationHistory();
 let inVault=false,vaultBusy=false,stateRefresh=Promise.resolve();
-function routeSnapshot(){return {page,kind,star,scope,folder,dateRange,scopeKinds:[...scopeKinds],offset,search:searchQuery,sort:prefs.sort,thumbs:prefs.thumbs,view:prefs.view,settings:settingsUI?.location()||{tab:'general',hash:''},scroll:$(page==='settings'?'#settingsPage':'#resourceScroll').scrollTop}}
+function routeSnapshot(){return {page,kind,star,scope,folder,dateRange,scopeKinds:[...scopeKinds],offset,search:searchQuery,sort:prefs.sort,thumbs:prefs.thumbs,view:prefs.view,settings:settingsUI?.location()||{tab:'general',hash:''},scroll:$(page==='settings'?'#settingsPage':page==='usage'?'#usagePage':'#resourceScroll').scrollTop}}
 function navigationButtons(){$('#navigateBack').disabled=!navigation.canBack;$('#navigateForward').disabled=!navigation.canForward}
 function navigate(change){navigation.replace(routeSnapshot());change();navigation.push(routeSnapshot());navigationButtons()}
 async function travel(step){
  const route=navigation.move(step,routeSnapshot());if(!route)return;navigationButtons();if($('#detail').open)closeDetail();
  kind=route.kind;star=route.star;scope=route.scope;folder=route.folder||'';dateRange=route.dateRange;scopeKinds=route.scopeKinds||[];offset=route.offset;searchQuery=route.search;
  const changed=['sort','thumbs','view'].some(k=>prefs[k]!==route[k]);for(const k of ['sort','thumbs','view'])prefs[k]=route[k];applyTheme();if(changed)persistPrefs();$('#group').value=scope;
- if(route.page==='settings'){page='settings';$('#libraryPage').hidden=true;$('#settingsPage').hidden=false;settingsUI.open(route.settings.tab,route.settings.hash);$('#settingsPage').scrollTop=route.scroll;header();load()}
+ if(route.page==='settings'){setPage('settings');settingsUI.open(route.settings.tab,route.settings.hash);$('#settingsPage').scrollTop=route.scroll;header();load()}
+ else if(route.page==='usage'){showUsage();$('#usagePage').scrollTop=route.scroll}
  else{showLibrary();header();await load({scrollTop:route.scroll,reusePage:true})}
  document.body.classList.remove('mobile-nav');applyTheme();setupTour?.refresh();
 }
@@ -274,7 +276,7 @@ function header(){
  syncGroupingControls();syncDatePicker();
  const title=inVault?(folder?folderName(folder):t('privateSpace')):scope?contactName(scope):star?t('favorites'):labels[kind]||(folder?folderName(folder):t('allResources'));
  $('#summary').textContent=stateSummary();
- $('#title').textContent=title;renderBreadcrumb(page==='settings'?t('settings'):title);
+ $('#title').textContent=title;renderBreadcrumb(page==='settings'?t('settings'):page==='usage'?t('usageOverview'):title);
  $('#backScope').hidden=!scope;$('#bindScope').hidden=!isWechat()||!scope||scope==='未分组';$('#bindScope').innerHTML=icon('edit')+(contacts[scope]?t('editConversation'):t('bindConversation'));
  $('#group').hidden=!isWechat()||!!scope;$('.view-controls').hidden=isScopes();
  const searchFilter=$('#clearSearch');
@@ -296,7 +298,7 @@ function renderBreadcrumb(title){
  const key=JSON.stringify([title,rootName,folders,folders?folder:null,kind,star,scope,inVault]);
  if(key===breadcrumbKey)return;
  breadcrumbKey=key;
- $('#breadcrumbIcon').innerHTML=iconSvg(library?(inVault?'lock':'folder'):'settings');
+ $('#breadcrumbIcon').innerHTML=iconSvg(library?(inVault?'lock':'folder'):page==='usage'?'info':'settings');
  root.replaceChildren();
  const append=(label,open)=>{
   if(root.childElementCount){
@@ -550,7 +552,7 @@ async function syncState(){
   prefs.grouped=source.grouped;
   directoryUI.refresh().catch(()=>{});
  }
- renderState();applyTheme();header();updateDirectoryUI();
+ renderState();applyTheme();header();updateDirectoryUI();updateUsage();
  if(page==='settings'&&(rootChanged||previous.scanning!==next.scanning))settingsUI.render();
  if(scanFinished&&!inVault&&pendingDirectory?.started&&!pendingDirectory.rescan&&!pendingDirectory.ready&&!pendingDirectory.stayInSettings){
   navigate(()=>{
@@ -573,11 +575,61 @@ function closeMobileSidebar(){
  if(restoreFocus)$('#toggleSidebar').focus();
  directoryUI.hideInfo();
 }
-function showLibrary(){page='library';$('#libraryPage').hidden=false;$('#settingsPage').hidden=true;closeMobileSidebar();header()}
+function setPage(next){
+ page=next;
+ $('#libraryPage').hidden=page!=='library';
+ $('#settingsPage').hidden=page!=='settings';
+ $('#usagePage').hidden=page!=='usage';
+ $('#openUsage').classList.toggle('active',page==='usage');
+}
+function showLibrary(){setPage('library');closeMobileSidebar();header()}
+let usageRequest,usageKey,usageData,usageFailed=false,usageRenderKey;
+function updateUsage(){
+ if(page!=='usage')return;
+ const thumbs=!isWechat()||prefs.thumbs;
+ const key=JSON.stringify([state.root,state.updated,thumbs,new Date().toDateString()]);
+ if(key!==usageKey){
+  usageRequest?.abort();
+  usageKey=key;
+  usageData=null;
+  usageFailed=false;
+  usageRequest=null;
+ }
+ if(!usageRequest&&!usageData&&!usageFailed&&state.root&&state.updated){
+  const request=new AbortController();
+  usageRequest=request;
+  api('activity?thumbs='+(thumbs?1:0),undefined,request.signal).then(data=>{
+   if(request!==usageRequest)return;
+   usageRequest=null;
+   if(data.root!==state.root||data.updated!==state.updated)return;
+   usageData=data;
+   updateUsage();
+  }).catch(()=>{
+   if(request!==usageRequest)return;
+   usageRequest=null;
+   usageFailed=true;
+   updateUsage();
+  });
+ }
+ const counts=resourceCounts(),sizes=resourceKindBytes();
+ const name=state.root?directoryUI.name(state.root):t('waitingToScan');
+ const status=usageFailed?'usageError':state.scanning?'scanning':state.updated?'usageLoading':'waitingToScan';
+ const renderKey=JSON.stringify([key,counts,sizes,state.folderCount,name,status,!!usageData,getLocale()]);
+ if(renderKey===usageRenderKey)return;
+ usageRenderKey=renderKey;
+ const root=$('#usageContent');
+ const focusHeading=document.activeElement===root.querySelector('h1');
+ renderUsage(root,{name,counts,sizes,folders:state.folderCount||0,activity:usageData,status,
+  retry:usageFailed?()=>{usageFailed=false;updateUsage();$('#usageTitle').focus()}:null,labels,bytes,esc});
+ if(focusHeading)$('#usageTitle').focus({preventScroll:true});
+}
+function showUsage(){
+ setPage('usage');closeMobileSidebar();header();updateUsage();setupTour?.refresh();
+}
 function enterFolder(path){navigate(()=>{if(inVault)selected.clear();searchQuery='';folder=path;scope='';offset=0;showLibrary();load({reusePage:true})})}
 function enterScope(hash){navigate(()=>{searchQuery='';scope=hash;scopeKinds=hash&&kind?[kind]:[];offset=0;$('#group').value=hash;$('#resourceScroll').scrollTop=0;showLibrary();load({reusePage:true})})}
 function setView(k,s=false){if(inVault)return leaveVault(()=>setView(k,s));navigate(()=>{searchQuery='';kind=k;star=s;scope='';scopeKinds=[];offset=0;$('#group').value='';showLibrary();load({reusePage:true})})}
-function showSettings(tab='general',hash=''){if(inVault)return leaveVault(()=>showSettings(tab,hash));navigate(()=>{if($('#detail').open)closeDetail();page='settings';$('#libraryPage').hidden=true;$('#settingsPage').hidden=false;closeMobileSidebar();header();settingsUI.open(tab,hash);$('#settingsPage').scrollTop=0;setupTour?.refresh()})}
+function showSettings(tab='general',hash=''){if(inVault)return leaveVault(()=>showSettings(tab,hash));navigate(()=>{if($('#detail').open)closeDetail();setPage('settings');closeMobileSidebar();header();settingsUI.open(tab,hash);$('#settingsPage').scrollTop=0;setupTour?.refresh()})}
 async function rescan(){
  if(!state.root||state.scanning||sourceBusy||choosingSource)return;
  await scanDirectory(async()=>{
@@ -874,6 +926,17 @@ function sidebar(){
   }
  }else setPref('sidebarCollapsed',!prefs.sidebarCollapsed);
 }
+$('#openUsage').onclick=event=>{
+ event.stopPropagation();
+ if(page==='usage')return;
+ const open=()=>navigate(()=>{
+  if($('#detail').open)closeDetail();
+  showUsage();
+  $('#usagePage').scrollTop=0;
+  $('#usageTitle').focus({preventScroll:true});
+ });
+ if(inVault)leaveVault(open);else open();
+};
 $('#toggleStorage').onclick=event=>{
  const button=event.currentTarget;
  const expanded=button.getAttribute('aria-expanded')!=='true';
@@ -1013,7 +1076,7 @@ document.addEventListener('keydown',e=>{
 function applyLocale(){
  setLocale(prefs.locale);translateStatic();updateDirectoryUI();labels=kindLabels();groupOptions();applyTheme();
  renderBreakdown();
- renderState();if(loadingMore)setListLoading(t('loading'));else $('#loadState').textContent=loadFailed?t('clickToRetry'):result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');render();header();if(page==='settings')settingsUI.render();setupTour?.refresh();
+ renderState();if(loadingMore)setListLoading(t('loading'));else $('#loadState').textContent=loadFailed?t('clickToRetry'):result.items.length<result.total?t('scrollToLoadMore'):t('allResourcesLoaded');render();header();updateUsage();if(page==='settings')settingsUI.render();setupTour?.refresh();
 }
 installSelects();renderIcons();selection();applyTheme();
 async function start(){

@@ -145,7 +145,7 @@ func main() {
 				return
 			}
 			action := strings.TrimPrefix(path, "api/")
-			if r.Method == "GET" && action != "status" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" && action != "resource" {
+			if r.Method == "GET" && action != "status" && action != "activity" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" && action != "resource" {
 				http.Error(w, "POST required", 405)
 				return
 			}
@@ -270,6 +270,8 @@ func main() {
 				jsonOut(prefs.Get(st.Root))
 			case "histogram":
 				thumbnails.serveHistogram(w, r, lib, r.URL.Query().Get("id"))
+			case "activity":
+				jsonOut(lib.Activity(time.Now(), r.URL.Query().Get("thumbs") == "1"))
 			case "status":
 				status := lib.Status(token)
 				status.Error = localizedError(prefs.Get(status.Root).Preferences.Locale, status.Error)

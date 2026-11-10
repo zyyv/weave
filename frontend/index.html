@@ -19,9 +19,12 @@
 <details id="recentSources" class="source-section" open><summary><i data-icon="chevron"></i><span data-i18n="recentSources">最近打开</span></summary><div id="recentSourceRows"></div></details>
 </div>
 <section class="storage-section">
- <button id="toggleStorage" type="button" aria-expanded="false" aria-controls="storageDetails">
-  <i data-icon="drive"></i><span data-i18n="currentSourceUsage">当前目录用量</span><i class="storage-chevron" data-icon="chevron"></i>
- </button>
+ <div class="storage-heading">
+  <button id="toggleStorage" type="button" aria-expanded="false" aria-controls="storageDetails">
+   <i data-icon="drive"></i><span data-i18n="currentSourceUsage">当前目录用量</span>
+  </button>
+  <button id="openUsage" class="icon" type="button" data-icon="info" aria-controls="usagePage" data-i18n-title="usageOverview" data-i18n-aria-label="usageOverview"></button>
+ </div>
  <div id="storageDetails" inert><div class="storage-content">
   <div id="storage"><strong>—</strong><span data-i18n="waitingToScan">等待扫描</span><div id="typebar"></div></div>
   <div id="breakdown"></div>
@@ -69,6 +72,7 @@
  <path class="empty-art-tray" d="M24 53h16l6 9h20l6-9h16a6 6 0 0 1 6 6v15a8 8 0 0 1-8 8H26a8 8 0 0 1-8-8V59a6 6 0 0 1 6-6Z"/>
  <path class="empty-art-sheet" d="M47 72h18"/>
 </svg><h2 id="emptyTitle" data-i18n="noMatchingResources">没有匹配的资源</h2><p data-i18n="tryDifferentKeywordsOrChangeTheFilters">试试其他关键词，或更改筛选条件。</p><button id="reset" data-i18n="clearFilters">清除筛选</button></div></section><button id="loadState" class="load-state" aria-live="polite"></button></div></div></section>
+<section id="usagePage" aria-labelledby="usageTitle" hidden><div id="usageContent" data-ui></div></section>
 <section id="settingsPage" hidden><div class="settings-top"><h1 data-i18n="settings">设置</h1><span id="settingsState" role="status" data-i18n="changesAreSavedAutomatically">更改会自动保存</span></div><div class="settings-layout"><nav id="settingsNav"><button data-section="general" class="active" data-i18n="general">通用</button><button data-section="appearance" data-i18n="appearance">外观</button><button data-section="playback" data-i18n="playback">播放器</button><button data-section="bindings" data-i18n="conversationBindings">会话绑定</button><button data-section="data" data-i18n="dataStorage">数据与存储</button></nav><div id="settingsContent"></div></div></section></main>
 <dialog id="commandPalette" aria-label="命令面板" data-i18n-aria-label="commandPalette">
  <div class="command-input">
