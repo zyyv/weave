@@ -44,7 +44,7 @@ Requires macOS 12 or later. Choose a package matching your Mac: `arm64` for Appl
 
 ## Local data and limitations
 
-Weave reads the source directory without deleting, moving, renaming, or writing its files. Previews, playback, and voice decoding run locally without external requests. The local service listens only on `127.0.0.1`, using random ports and an app access path. The Office renderer runs on an isolated local origin.
+Browsing, favoriting, and tagging leave source files unchanged. In the desktop app, confirming deletion in file details moves the file to the system Trash, where it can be restored. Previews, playback, and voice decoding run locally without external requests. The local service listens only on `127.0.0.1`, using random ports and an app access path. The Office renderer runs on an isolated local origin.
 
 Library metadata is stored separately in `~/Library/Application Support/Weave/`:
 

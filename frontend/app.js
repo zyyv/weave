@@ -893,6 +893,13 @@ $('#openVault').onclick=enterVault;
 $('#lockVault').onclick=()=>leaveVault();
 $('#privateSelected').onclick=()=>updatePrivacy([...selected],!inVault);
 $('#privateItem').onclick=()=>{if(detail)updatePrivacy([detail.id],!inVault)};
+function renderDetailFavorite(star){
+ const button=$('#starItem');
+ button.innerHTML=icon('star');
+ button.setAttribute('aria-pressed',String(star));
+ button.setAttribute('aria-label',t('favorite'));
+ button.title=t(star?'favorited':'favorite');
+}
 
 settingsUI=createSettings({$,esc,icon,api,toast,getPrefs:()=>prefs,getState:()=>state,getContacts:()=>contacts,getSource:()=>source,isWechat,sourceBusy:()=>sourceBusy||choosingSource,changeSource,groupingMode,groupingOptions,changeGrouping,setPref,onNavigate:navigate,onContacts:c=>{contacts=c;groupOptions();syncSelects();load()},choose,rescan,directoryName:directoryUI.name,directoryEntries:directoryUI.entries,editDirectory:async (...args)=>{await directoryUI.edit(...args);await refreshState()},removeDirectory:async root=>{await directoryUI.remove(root);await refreshState()},directoryActivity,getPendingDirectory:()=>pendingDirectory?.path,getDevelopment:()=>development,startTour:()=>setupTour.start({force:true}),replayTour:()=>{navigate(()=>showLibrary());setupTour.start({force:true,preview:true})}});
 setupTour=createSetupTour({getState:()=>state,getRoute:()=>({page,tab:settingsUI.location().tab}),getBusy:()=>choosingSource,isDismissed:()=>prefs.setupTourDismissed,onDismiss:()=>setPref('setupTourDismissed',true),onComplete:()=>toast(t('tourComplete')),onPreviewComplete:()=>toast(t('tourPreviewComplete'))});
@@ -928,15 +935,22 @@ async function openRecentResource({root, id}) {
  finally{recentResourceOpening=false}
 }
 function openDetail(item){
- disposePlayer?.();disposePlayer=null;disposeTags?.();detailMetadata?.dispose();detailHistogram?.dispose();detailHistogram=null;const token=++detailVersion;detail={...item};const x=detail;const index=result.items.findIndex(r=>r.id===x.id);color($('#detail'),x.kind);$('#detailBadge').innerHTML=icon(kindIcon(x.kind))+t('resourceDetails');$('#detailType').textContent=(labels[x.kind]||t('other'))+' / '+x.ext.slice(1).toUpperCase();$('#detailName').textContent=x.name;$('#detailName').title=x.name;$('#fullscreenFilename').textContent=x.name;$('#detailSubtitle').replaceChildren();$('#detailSubtitle').hidden=x.kind!=='image';$('#detailPosition').textContent=browseFolders()?`${t('of', {p0: result.items.slice(0,index+1).filter(x=>!x.directory).length, p1: result.fileCount})}`:`${t('of', {p0: index+1, p1: result.total})}`;$('#prevDetail').disabled=!result.items.slice(0,index).some(x=>!x.directory);$('#nextDetail').disabled=!result.items.slice(index+1).some(x=>!x.directory)&&result.items.length>=result.total;$('#starItem').innerHTML=icon('star')+(x.star?t('favorited'):t('favorite'));detailMetadata=mountImageMetadata($('#metadata'),{...x,thumbnail:isWechat()&&x.thumbnail});disposeTags=mountTagEditor($('#tagEditor'),x.tags,async tags=>{await api('mark',{id:x.id,star:x.star,tags});x.tags=tags;load()});$('#detailPath').textContent=x.path;$('#detailPath').title=x.path;$('#detailLocationLabel').textContent=t(isWechat()?'conversationLabel':'containingFolder');$('#detailContact').innerHTML=isWechat()?`<span class="avatar">${x.group==='未分组'?icon('folder'):contactAvatar(x.group)}</span><span><strong>${esc(contactName(x.group))}</strong><small>${esc(contacts[x.group]?.username||x.group.slice(0,16)+'…')}</small></span>${icon('chevron')}`:`<span class="avatar">${icon('folder')}</span><span><strong>${esc(folderName(x.folder))}</strong><small>${esc(x.folder||folderName(''))}</small></span>${icon('chevron')}`;
+ $('#copyImageItem').hidden=item.kind!=='image'||!window.mygo?.call;
+ disposePlayer?.();disposePlayer=null;disposeTags?.();detailMetadata?.dispose();detailHistogram?.dispose();detailHistogram=null;const token=++detailVersion;detail={...item};const x=detail;const index=result.items.findIndex(r=>r.id===x.id);color($('#detail'),x.kind);$('#detailBadge').innerHTML=icon(kindIcon(x.kind))+t('resourceDetails');$('#detailType').textContent=(labels[x.kind]||t('other'))+' / '+x.ext.slice(1).toUpperCase();$('#detailName').textContent=x.name;$('#detailName').title=x.name;$('#fullscreenFilename').textContent=x.name;$('#detailSubtitle').replaceChildren();$('#detailSubtitle').hidden=x.kind!=='image';$('#detailPosition').textContent=browseFolders()?`${t('of', {p0: result.items.slice(0,index+1).filter(x=>!x.directory).length, p1: result.fileCount})}`:`${t('of', {p0: index+1, p1: result.total})}`;$('#prevDetail').disabled=!result.items.slice(0,index).some(x=>!x.directory);$('#nextDetail').disabled=!result.items.slice(index+1).some(x=>!x.directory)&&result.items.length>=result.total;renderDetailFavorite(x.star);detailMetadata=mountImageMetadata($('#metadata'),{...x,thumbnail:isWechat()&&x.thumbnail});disposeTags=mountTagEditor($('#tagEditor'),x.tags,async tags=>{await api('mark',{id:x.id,star:x.star,tags});x.tags=tags;load()});$('#detailPath').textContent=x.path;$('#detailPath').title=x.path;
+ $('#detailConversation').hidden=!isWechat();
+ $('#detailLocationLabel').textContent=isWechat()?t('conversationLabel'):t('containingFolder');
+ if(isWechat())$('#detailContact').innerHTML=`<span class="avatar">${x.group==='未分组'?icon('folder'):contactAvatar(x.group)}</span><span><strong>${esc(contactName(x.group))}</strong><small>${esc(contacts[x.group]?.username||x.group.slice(0,16)+'…')}</small></span>${icon('chevron')}`;
  if(index<0){
   $('#detailPosition').textContent='';
   $('#prevDetail').disabled=$('#nextDetail').disabled=true;
  }
  if(!inVault)directoryUI.remember(state.root,x,kindIcon(x.kind));
  const privacyButton=$('#privateItem');
- privacyButton.hidden=inVault&&!x.privateEntry;
- privacyButton.innerHTML=icon('lock')+t(inVault?'privateRestoreItem':'privateAddItem');
+ privacyButton.disabled=inVault&&!x.privateEntry;
+ privacyButton.innerHTML=icon(inVault?'lock':'unlock');
+ privacyButton.setAttribute('aria-pressed',String(inVault));
+ privacyButton.setAttribute('aria-label',t('privateStatus'));
+ privacyButton.title=t(privacyButton.disabled?'errors.vaultInherited':inVault?'privateRestoreItem':'privateAddItem');
  const histogramRoot=$('#detailHistogram');histogramRoot.replaceChildren();histogramRoot.hidden=x.kind!=='image';if(x.kind==='image'){detailHistogram=mountHistogram(histogramRoot);detailHistogram.load(x.id)}
  $('#detail .detail-info').scrollTop=0;const preview=$('#preview');preview.classList.toggle('image-preview',x.kind==='image');preview.replaceChildren();const unsupported=t=>{if(token===detailVersion)preview.innerHTML=icon(kindIcon(x.kind))+`<p>${esc(t)}</p>`};
  if(!$('#detail').open){setPreviewFullscreen(false);$('#detail').showModal()}
@@ -976,14 +990,133 @@ async function adjacent(step){
   if(!result.items[i].directory){if(detail?.id===current)openDetail(result.items[i]);return}i+=step;
  }
 }
-$('#prevDetail').onclick=()=>adjacent(-1);$('#nextDetail').onclick=()=>adjacent(1);$('#detailContact').onclick=()=>{const x=detail;closeDetail();if(inVault)enterFolder(x.folder);else if(isWechat())enterScope(x.group);else if(groupingMode()==='grouped'){enterFolder(x.folder)}else{changeGrouping('grouped')?.then(saved=>{if(saved)enterFolder(x.folder)})}};
+$('#prevDetail').onclick=()=>adjacent(-1);$('#nextDetail').onclick=()=>adjacent(1);$('#detailContact').onclick=()=>{const x=detail;closeDetail();if(inVault)enterFolder(x.folder);else enterScope(x.group)};
 $$('[data-kind]').forEach(b=>b.onclick=()=>setView(b.dataset.kind));$('#stars').onclick=()=>setView('',true);$('#settingsButton').onclick=()=>showSettings();$('#backScope').onclick=()=>enterScope('');$('#bindScope').onclick=()=>showSettings('bindings',scope);$('#scopeGrouping').onchange=e=>changeGrouping(e.target.value);
 $$('#scopeFilters button').forEach(b=>b.onclick=()=>navigate(()=>{const k=b.dataset.scopeKind;scopeKinds=k?(scopeKinds.includes(k)?scopeKinds.filter(v=>v!==k):[...scopeKinds,k]):[];offset=0;load()}));
 $('#clearSearch').onclick=()=>applyLibrarySearch('');$('#group').onchange=e=>enterScope(e.target.value);$('#sort').onchange=e=>setPref('sort',e.target.value);$('#clearSelection').onclick=()=>{selected.clear();selection()};$('#gridView').onclick=()=>setPref('view','grid');$('#listView').onclick=()=>setPref('view','list');$('#refresh').onclick=rescan;
 async function doExport(ids){const r=await api('export',{ids});toast(r.count?t('exportedFiles', {p0: r.count}):t('exportCanceled'),r.count?'success':'info')}
+const copyImageButton=$('#copyImageItem');
+async function copyResourceImage(item){
+ if(item?.kind!=='image'||copyImageButton.disabled)return;
+ copyImageButton.disabled=true;
+ try {
+  await api('copy-image',{root:state.root,id:item.id});
+  toast(t('imageCopied'),'success');
+ } finally {
+  copyImageButton.disabled=false;
+ }
+}
+copyImageButton.onclick=()=>action(()=>copyResourceImage(detail));
 $('#export').onclick=()=>action(async()=>{$('#export').disabled=true;try{await doExport([...selected])}finally{selection()}});$('#exportItem').onclick=()=>action(()=>doExport([detail.id]));$('#reveal').onclick=()=>action(()=>api('reveal',{ids:[detail.id]}));
-$('#copyRelativePath').onclick=()=>action(async()=>{if(!detail)return;await copyPath(relativeResourcePath(detail.path,state.root));toast(t('relativePathCopied'),'success')});$('#copyAbsolutePath').onclick=()=>action(async()=>{if(!detail)return;await copyPath(detail.path);toast(t('absolutePathCopied'),'success')});
-$('#starItem').onclick=()=>action(async()=>{if(!detail)return;const x=detail;$('#starItem').disabled=true;try{await api('mark',{id:x.id,star:!x.star,tags:x.tags});x.star=!x.star;if(detail?.id===x.id)$('#starItem').innerHTML=icon('star')+(x.star?t('favorited'):t('favorite'));toast(x.star?t('addedToFavorites'):t('removedFromFavorites'),'success');await refreshState();await load()}finally{$('#starItem').disabled=false}});
+async function copyResourcePath(item, relative) {
+ const path=relative?relativeResourcePath(item.path,state.root):item.path;
+ if(window.mygo?.call)await window.mygo.call('ResourceMenu.CopyPath',path);
+ else await copyPath(path);
+ toast(t(relative?'relativePathCopied':'absolutePathCopied'),'success');
+}
+async function toggleResourceFavorite(item) {
+ const button=$('#starItem');
+ if(button.disabled)return;
+ button.disabled=true;
+ const starred=!item.star;
+ try {
+  await api('mark',{id:item.id,star:starred,tags:item.tags});
+  item.star=starred;
+  if(detail?.id===item.id){
+   detail.star=starred;
+   renderDetailFavorite(starred);
+  }
+  toast(t(starred?'addedToFavorites':'removedFromFavorites'),'success');
+  await refreshState();
+  await load();
+ } finally {
+  button.disabled=false;
+ }
+}
+$('#copyRelativePath').onclick=()=>action(()=>detail&&copyResourcePath(detail,true));
+$('#copyAbsolutePath').onclick=()=>action(()=>detail&&copyResourcePath(detail,false));
+$('#starItem').onclick=()=>action(()=>detail&&toggleResourceFavorite(detail));
+const trashDialog=$('#trashDialog'),confirmTrash=$('#confirmTrash'),cancelTrash=$('#cancelTrash');
+let trashTarget=null,trashBusy=false;
+function confirmResourceTrash(item){
+ if(!item||trashBusy||trashDialog.open)return;
+ trashTarget={root:state.root,id:item.id,size:item.size,modified:item.modified};
+ $('#trashFilename').textContent=item.name;
+ $('#trashError').textContent='';
+ trashDialog.showModal();
+}
+$('#trashItem').onclick=()=>confirmResourceTrash(detail);
+
+let resourceMenuOpen=false;
+$('#items').addEventListener('contextmenu',event=>{
+ const card=event.target.closest('.asset[data-id]');
+ const item=itemIndex.get(card?.dataset.id);
+ if(!item||!window.mygo?.call)return;
+ event.preventDefault();
+ if(resourceMenuOpen)return;
+ const root=state.root;
+ const privateView=inVault;
+ const keyboard=event.button===0&&!event.ctrlKey;
+ const bounds=card.getBoundingClientRect();
+ const x=keyboard?bounds.left+12:event.clientX;
+ const y=keyboard?bounds.top+12:event.clientY;
+ resourceMenuOpen=true;
+ void action(async()=>{
+  let command;
+  try {
+   command=await window.mygo.call('ResourceMenu.Show',Math.round(x),Math.round(y),{
+    starred:Boolean(item.star),
+    image:item.kind==='image',
+    copyImageBusy:copyImageButton.disabled,
+    privateView,
+    privacyDisabled:vaultBusy||Boolean(state.scanning)||privateView&&!item.privateEntry,
+    trashBusy,
+   });
+  } finally {
+   resourceMenuOpen=false;
+  }
+  const current=itemIndex.get(item.id);
+  if(state.root!==root||inVault!==privateView||!current||current.modified!==item.modified||current.size!==item.size)return;
+  switch(command){
+   case 'preview': return openDetail(current);
+   case 'favorite': return toggleResourceFavorite(current);
+   case 'copyImage': return copyResourceImage(current);
+   case 'reveal': return api('reveal',{ids:[current.id]});
+   case 'export': return doExport([current.id]);
+   case 'relativePath': return copyResourcePath(current,true);
+   case 'absolutePath': return copyResourcePath(current,false);
+   case 'privacy':
+    if(!privateView||current.privateEntry)return updatePrivacy([current.id],!privateView);
+    return;
+   case 'trash': return confirmResourceTrash(current);
+  }
+ });
+});
+trashDialog.addEventListener('cancel',event=>{if(trashBusy)event.preventDefault()});
+trashDialog.addEventListener('close',()=>{if(!trashDialog.open)trashTarget=null});
+confirmTrash.onclick=async()=>{
+ if(!trashTarget||trashBusy)return;
+ const target=trashTarget;
+ trashBusy=true;
+ confirmTrash.disabled=cancelTrash.disabled=true;
+ $('#trashError').textContent='';
+ try{
+  await api('trash',target);
+ }catch(error){
+  $('#trashError').textContent=error.message;
+  return;
+ }finally{
+  trashBusy=false;
+  confirmTrash.disabled=cancelTrash.disabled=false;
+ }
+ trashDialog.close();
+ if(detail?.id===target.id)closeDetail();
+ directoryUI.forgetFile(target.root,target.id);
+ selected.delete(target.id);
+ selection();
+ toast(t('fileMovedToTrash'),'success');
+ await action(refreshState);
+};
 function syncSidebar(){
  const expanded=innerWidth<=720?document.body.classList.contains('mobile-nav'):!prefs.sidebarCollapsed;
  const toggle=$('#toggleSidebar');
@@ -1120,7 +1253,7 @@ function toggleCommands(){
 }
 $('#sourceSearch').onclick=toggleCommands;
 document.addEventListener('keydown',e=>{
- if(e.defaultPrevented||e.isComposing)return;
+ if(e.defaultPrevented||e.isComposing||trashDialog.open)return;
  const shortcut=(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey;
  if(shortcut&&e.key.toLowerCase()==='k'){
   e.preventDefault();

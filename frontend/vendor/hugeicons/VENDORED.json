@@ -21,6 +21,7 @@
     "box": "package",
     "star": "star",
     "lock": "square-lock-01",
+    "unlock": "square-unlock-01",
     "refresh": "refresh",
     "export": "upload-01",
     "import": "download-01",

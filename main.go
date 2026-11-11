@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/egoist/mygo"
@@ -443,6 +444,39 @@ func main() {
 					return
 				}
 				jsonOut(true)
+			case "trash":
+				if *serve {
+					fail(fmt.Errorf("%s", message("errors.desktopTrash")))
+					return
+				}
+				var in struct {
+					Root, ID       string
+					Size, Modified int64
+				}
+				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 65536)).Decode(&in); e != nil {
+					fail(e)
+					return
+				}
+				if e := lib.Trash(in.Root, in.ID, in.Size, in.Modified, mygo.Shell.TrashItem, token); e != nil {
+					fail(e)
+					return
+				}
+				jsonOut(true)
+			case "copy-image":
+				if *serve {
+					fail(errors.New(message("errors.desktopCopyImage")))
+					return
+				}
+				var in struct{ Root, ID string }
+				if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); err != nil {
+					fail(err)
+					return
+				}
+				if err := copyLibraryImage(r.Context(), lib, in.Root, in.ID, token); err != nil {
+					fail(err)
+					return
+				}
+				jsonOut(true)
 			case "reveal", "export":
 				var in struct {
 					IDs []string `json:"ids"`
@@ -611,8 +645,18 @@ func main() {
 	if *serve {
 		select {}
 	}
+	mygo.BindAs("ResourceMenu", resourceMenu{development: *development, message: message})
 	mygo.App.WhenReady(func() {
-		mygo.NewWindow(mygo.WindowOptions{Title: message("weaveResourceLibrary"), URL: base, BackgroundColor: "#212121", Width: 1440, Height: 920, MinWidth: 840, MinHeight: 620, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}})
+		devTools := mygo.DevToolsDisabled
+		if *development {
+			devTools = mygo.DevToolsEnabled
+		}
+		win := mygo.NewWindow(mygo.WindowOptions{Title: message("weaveResourceLibrary"), URL: base, BackgroundColor: "#212121", Width: 1440, Height: 920, MinWidth: 840, MinHeight: 620, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}, Page: mygo.PageOptions{DevTools: devTools, TrustedOrigins: []string{origin}}})
+		if !*development {
+			win.Page().OnContextMenu(func(event *mygo.ContextMenuEvent) {
+				event.Menu.Remove(mygo.ContextMenuReload, mygo.ContextMenuInspect)
+			})
+		}
 	})
 	if e = mygo.App.Run(); e != nil {
 		log.Fatal(e)

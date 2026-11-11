@@ -12,7 +12,7 @@ const names = {
   down: 'arrow-down-01', back: 'arrow-left-01', arrowLeft: 'arrow-left-02',
   arrowRight: 'arrow-right-02', grid: 'grid-view', image: 'image-01',
   video: 'video-01', audio: 'music-note-01', file: 'file-01', box: 'package',
-  star: 'star', lock: 'square-lock-01', refresh: 'refresh', export: 'upload-01',
+  star: 'star', lock: 'square-lock-01', unlock: 'square-unlock-01', refresh: 'refresh', export: 'upload-01',
   import: 'download-01', search: 'search-01', list: 'left-to-right-list-bullet',
   close: 'cancel-01', tag: 'tag-01', settings: 'settings-01', layers: 'layers-01',
   edit: 'pencil-edit-02', trash: 'delete-02', users: 'user-group', play: 'play', pause: 'pause',

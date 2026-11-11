@@ -103,6 +103,27 @@ func (t *thumbnailCache) serve(w http.ResponseWriter, r *http.Request, lib *libr
 	}
 	width = max(1, int(float64(width)*scale))
 	height = max(1, int(float64(height)*scale))
+	var buf bytes.Buffer
+	if png.Encode(&buf, orientedImage(src, width, height, orientation)) != nil {
+		http.Error(w, "封面生成失败", 500)
+		return
+	}
+	data := buf.Bytes()
+	t.mu.Lock()
+	if _, exists := t.values[key]; !exists {
+		if len(t.keys) >= 128 {
+			delete(t.values, t.keys[0])
+			t.keys = t.keys[1:]
+		}
+		t.keys = append(t.keys, key)
+	}
+	t.values[key] = data
+	t.mu.Unlock()
+	send(data)
+}
+
+func orientedImage(src image.Image, width, height, orientation int) image.Image {
+	bounds := src.Bounds()
 	outWidth, outHeight := width, height
 	if orientation >= 5 {
 		outWidth, outHeight = height, width
@@ -130,23 +151,7 @@ func (t *thumbnailCache) serve(w http.ResponseWriter, r *http.Request, lib *libr
 			dst.Set(dx, dy, src.At(bounds.Min.X+x*bounds.Dx()/width, bounds.Min.Y+y*bounds.Dy()/height))
 		}
 	}
-	var buf bytes.Buffer
-	if png.Encode(&buf, dst) != nil {
-		http.Error(w, "封面生成失败", 500)
-		return
-	}
-	data := buf.Bytes()
-	t.mu.Lock()
-	if _, exists := t.values[key]; !exists {
-		if len(t.keys) >= 128 {
-			delete(t.values, t.keys[0])
-			t.keys = t.keys[1:]
-		}
-		t.keys = append(t.keys, key)
-	}
-	t.values[key] = data
-	t.mu.Unlock()
-	send(data)
+	return dst
 }
 
 // sips writes only to a private temporary output, never to the source path.
