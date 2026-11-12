@@ -62,7 +62,7 @@ func (l *Library) Browse(q Query, folder string) Result {
 	r.FolderPrivateEntry = q.Private && l.vault.records[l.state.Root].Paths[folder]
 	entries := []Item{}
 	dirs := map[string]bool{}
-	filtered := q.Search != "" || q.Kind != "" || q.Star
+	filtered := q.Search != "" || q.Kind != "" || q.TagColors != "" || q.Star
 	for _, i := range l.query(q).indices {
 		x := l.items[i]
 		if x.Folder == folder {
@@ -83,7 +83,7 @@ func (l *Library) Browse(q Query, folder string) Result {
 		}
 	}
 	for rel, d := range l.folders {
-		nameMatch := q.Search != "" && q.Kind == "" && !q.Star && strings.Contains(strings.ToLower(rel), strings.ToLower(q.Search))
+		nameMatch := q.Search != "" && q.Kind == "" && q.TagColors == "" && !q.Star && strings.Contains(strings.ToLower(rel), strings.ToLower(q.Search))
 		if d.Folder == folder && l.folderVisible(rel, q.Private) && (!filtered || dirs[rel] || nameMatch) {
 			d.PrivateEntry = q.Private && l.vault.records[l.state.Root].Paths[rel]
 			entries = append(entries, d)

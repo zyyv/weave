@@ -348,6 +348,7 @@ func (l *Library) Status(tokens ...string) Status {
 
 type Query struct {
 	Search, Kind, Group, Sort, Folder string
+	TagColors                         string
 	ModifiedFrom, ModifiedBefore      *int64 // Milliseconds since epoch, inclusive start and exclusive end.
 	Names                             map[string]string
 	Thumbs, Star                      bool
@@ -444,11 +445,23 @@ func (l *Library) Open(id string, tokens ...string) (*os.File, Item, error) {
 	return f, x, e
 }
 func (l *Library) Mark(id string, m Mark, tokens ...string) error {
+	return l.UpdateMark(id, &m.Star, &m.Tags, tokens...)
+}
+
+func (l *Library) UpdateMark(id string, star *bool, tags *string, tokens ...string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	i, ok := l.ids[id]
 	if !ok || !l.canRead(id, tokens) {
 		return os.ErrNotExist
+	}
+	previous := l.marks[id]
+	m := previous
+	if star != nil {
+		m.Star = *star
+	}
+	if tags != nil {
+		m.Tags = *tags
 	}
 	if len(m.Tags) > 1000 {
 		return fmt.Errorf("标签过长")
@@ -469,7 +482,6 @@ func (l *Library) Mark(id string, m Mark, tokens ...string) error {
 	if e = os.Rename(tmp, l.stateFile); e != nil {
 		return e
 	}
-	previous := l.marks[id]
 	item := l.items[i]
 	if previous.Star != m.Star && l.vault.items[id] == "" {
 		delta := int64(-1)
@@ -544,7 +556,8 @@ func (l *Library) Scopes(q Query) Scopes {
 	m := map[string]*Scope{}
 	r := Scopes{Items: []Scope{}}
 	kinds := kindsFor(q.Kind)
-	if q.Search == "" && !q.Star {
+	tagColors := kindsFor(q.TagColors)
+	if q.Search == "" && q.TagColors == "" && !q.Star {
 		for hash, byKind := range l.index.summaries[q.Thumbs] {
 			if q.Group != "" && hash != q.Group {
 				continue
@@ -584,7 +597,7 @@ func (l *Library) Scopes(q Query) Scopes {
 		}
 		for _, i := range candidates {
 			x := l.items[i]
-			if !l.visible(x.ID, false) || !matches(x, l.marks[x.ID], q, kinds, search) {
+			if !l.visible(x.ID, false) || !matches(x, l.marks[x.ID], q, kinds, tagColors, search) {
 				continue
 			}
 			g := m[x.Group]

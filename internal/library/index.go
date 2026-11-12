@@ -2,6 +2,7 @@ package library
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -101,7 +102,34 @@ func kindsFor(s string) map[string]bool {
 	}
 	return m
 }
-func matches(x Item, m Mark, q Query, kinds map[string]bool, search string) bool {
+
+// Keep the legacy tag mapping in sync with frontend/tag-editor.js.
+var tagPalette = [...]string{"red", "orange", "yellow", "green", "blue", "purple", "gray"}
+
+func matchesTagColors(tags string, colors map[string]bool) bool {
+	for _, tag := range strings.FieldsFunc(tags, func(r rune) bool { return r == ',' || r == '，' }) {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if colors[tag] {
+			return true
+		}
+		if slices.Contains(tagPalette[:], tag) {
+			continue
+		}
+		var hash uint32
+		for _, r := range tag {
+			hash = 31*hash + uint32(r)
+		}
+		if colors[tagPalette[hash%uint32(len(tagPalette))]] {
+			return true
+		}
+	}
+	return false
+}
+
+func matches(x Item, m Mark, q Query, kinds, tagColors map[string]bool, search string) bool {
 	if !q.Thumbs && x.Thumbnail {
 		return false
 	}
@@ -112,6 +140,9 @@ func matches(x Item, m Mark, q Query, kinds map[string]bool, search string) bool
 		return false
 	}
 	if q.Star && !m.Star {
+		return false
+	}
+	if len(tagColors) > 0 && !matchesTagColors(m.Tags, tagColors) {
 		return false
 	}
 	return search == "" || strings.Contains(strings.ToLower(x.Name+" "+x.Folder+" "+x.Group+" "+m.Tags+" "+q.Names[x.Group]), search)
@@ -138,11 +169,11 @@ func (l *Library) query(q Query) queryResult {
 		names = nil
 	}
 	keyBytes, _ := json.Marshal(struct {
-		Search, Kind, Group, Sort, Folder string
-		ModifiedFrom, ModifiedBefore      *int64
-		Thumbs, Star, Private             bool
-		Names                             map[string]string
-	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Folder, q.ModifiedFrom, q.ModifiedBefore, q.Thumbs, q.Star, q.Private, names})
+		Search, Kind, Group, Sort, Folder, TagColors string
+		ModifiedFrom, ModifiedBefore                 *int64
+		Thumbs, Star, Private                        bool
+		Names                                        map[string]string
+	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Folder, q.TagColors, q.ModifiedFrom, q.ModifiedBefore, q.Thumbs, q.Star, q.Private, names})
 	key := string(keyBytes)
 	l.cache.mu.Lock()
 	cached, ok := l.cache.values[key]
@@ -150,7 +181,7 @@ func (l *Library) query(q Query) queryResult {
 	if ok {
 		return cached
 	}
-	kinds, search := kindsFor(q.Kind), strings.ToLower(q.Search)
+	kinds, tagColors, search := kindsFor(q.Kind), kindsFor(q.TagColors), strings.ToLower(q.Search)
 	r := queryResult{indices: []int{}}
 	folderPrefix := q.Folder + "/"
 	for _, i := range l.candidates(q) {
@@ -162,7 +193,7 @@ func (l *Library) query(q Query) queryResult {
 			(q.ModifiedBefore != nil && x.Modified >= *q.ModifiedBefore) {
 			continue
 		}
-		if l.visible(x.ID, q.Private) && matches(x, l.marks[x.ID], q, kinds, search) {
+		if l.visible(x.ID, q.Private) && matches(x, l.marks[x.ID], q, kinds, tagColors, search) {
 			r.indices = append(r.indices, i)
 			r.bytes += x.Size
 		}

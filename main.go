@@ -368,7 +368,7 @@ func main() {
 					http.Error(w, message("errors.vaultLocked"), http.StatusForbidden)
 					return
 				}
-				query := library.Query{Private: private, VaultToken: token, Search: q.Get("search"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
+				query := library.Query{Private: private, VaultToken: token, Search: q.Get("search"), TagColors: q.Get("tagColors"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
 				if action == "scopes" {
 					jsonOut(lib.Scopes(query))
 				} else if action == "browse" {
@@ -432,14 +432,15 @@ func main() {
 				jsonOut(len(paths) > 0)
 			case "mark":
 				var in struct {
-					ID string `json:"id"`
-					library.Mark
+					ID   string  `json:"id"`
+					Star *bool   `json:"star"`
+					Tags *string `json:"tags"`
 				}
 				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); e != nil {
 					fail(e)
 					return
 				}
-				if e := lib.Mark(in.ID, in.Mark, token); e != nil {
+				if e := lib.UpdateMark(in.ID, in.Star, in.Tags, token); e != nil {
 					fail(e)
 					return
 				}

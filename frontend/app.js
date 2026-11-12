@@ -16,7 +16,7 @@ import {mountDocumentPreview} from './document-preview.js';
 import {documentCover} from './file-cover.js';
 import {loadingMark} from './loading-state.js';
 import {mountHistogram} from './image-histogram.js';
-import {mountTagEditor} from './tag-editor.js';
+import {createTagPalette,mountTagEditor,tagColors,tagDots,toggleTagColor} from './tag-editor.js';
 import {mountImageMetadata} from './image-metadata.js';
 import {relativeResourcePath,copyPath} from './path-actions.js';
 let disposeTags=null,detailMetadata=null,detailHistogram=null;
@@ -33,16 +33,16 @@ const kindLabels=()=>({image:t('images'),video:t('videos'),audio:t('voiceAudio')
 let labels=kindLabels();
 const kindIcon=k=>k==='document'?'file':k==='other'?'box':k;
 let prefs={locale:'zh-CN',theme:'dark',palette:'classic',grouped:true,typeColors:true,thumbs:false,density:'comfortable',view:'grid',sort:'date',volume:.8,speed:1,sidebarCollapsed:false},contacts={},source={mode:'auto',grouped:true},sourceBusy=false,state={groups:[],counts:{}},folder='',kind='',star=false,scope='',scopeKinds=[],offset=0,result={items:[],total:0},resultMode=true,selected=new Set(),detail=null,version=0,lastUpdate=0,page='library',disposePlayer=null,detailVersion=0,saveTimer,saveChain=Promise.resolve(),settingsUI,setupTour,choosingSource=false,pendingDirectory=null,development=false;
-let dateRange={start:'',end:''}, searchQuery='';
+let dateRange={start:'',end:''}, searchQuery='', tagFilter=[];
 const systemTheme=matchMedia('(prefers-color-scheme: dark)');
 const navigation=new NavigationHistory();
 let inVault=false,vaultBusy=false,stateRefresh=Promise.resolve();
-function routeSnapshot(){return {page,kind,star,scope,folder,dateRange,scopeKinds:[...scopeKinds],offset,search:searchQuery,sort:prefs.sort,thumbs:prefs.thumbs,view:prefs.view,settings:settingsUI?.location()||{tab:'general',hash:''},scroll:$(page==='settings'?'#settingsPage':page==='usage'?'#usagePage':'#resourceScroll').scrollTop}}
+function routeSnapshot(){return {page,kind,star,scope,folder,dateRange,scopeKinds:[...scopeKinds],offset,search:searchQuery,tagFilter,sort:prefs.sort,thumbs:prefs.thumbs,view:prefs.view,settings:settingsUI?.location()||{tab:'general',hash:''},scroll:$(page==='settings'?'#settingsPage':page==='usage'?'#usagePage':'#resourceScroll').scrollTop}}
 function navigationButtons(){$('#navigateBack').disabled=!navigation.canBack;$('#navigateForward').disabled=!navigation.canForward}
 function navigate(change){navigation.replace(routeSnapshot());change();navigation.push(routeSnapshot());navigationButtons()}
 async function travel(step){
  const route=navigation.move(step,routeSnapshot());if(!route)return;navigationButtons();if($('#detail').open)closeDetail();
- kind=route.kind;star=route.star;scope=route.scope;folder=route.folder||'';dateRange=route.dateRange;scopeKinds=route.scopeKinds||[];offset=route.offset;searchQuery=route.search;
+ kind=route.kind;star=route.star;scope=route.scope;folder=route.folder||'';dateRange=route.dateRange;scopeKinds=route.scopeKinds||[];offset=route.offset;searchQuery=route.search;tagFilter=route.tagFilter||[];
  const changed=['sort','thumbs','view'].some(k=>prefs[k]!==route[k]);for(const k of ['sort','thumbs','view'])prefs[k]=route[k];applyTheme();if(changed)persistPrefs();$('#group').value=scope;
  if(route.page==='settings'){setPage('settings');settingsUI.open(route.settings.tab,route.settings.hash);$('#settingsPage').scrollTop=route.scroll;header();load()}
  else if(route.page==='usage'){showUsage();$('#usagePage').scrollTop=route.scroll}
@@ -224,7 +224,7 @@ function syncGroupingControls(){
  $('#sort').value=listSort();
  $('#sort').disabled=!!scope||browseTimeline();
 }
-function browseFolders(){return !searchQuery&&(inVault||!isWechat()&&groupingMode()==='grouped')}
+function browseFolders(){return !tagFilter.length&&!searchQuery&&(inVault||!isWechat()&&groupingMode()==='grouped')}
 function resultEndpoint(){return isScopes()?'scopes':browseFolders()?'browse':'list'}
 function folderName(path){return path.split('/').filter(Boolean).pop()||(inVault?t('privateSpace'):directoryUI.name(state.root))}
 function resourceCounts(){return (isWechat()&&!prefs.thumbs?state.counts:state.allCounts||state.counts)||{}}
@@ -279,14 +279,14 @@ async function changeSource(change){
 function contactName(hash){return hash==='未分组'?t('rootFiles'):contacts[hash]?.name||t('unboundConversation')}
 function contactAvatar(hash){const c=contacts[hash];return c?.name?esc(c.name.slice(0,1)):icon('users')}
 function groupOptions(){const g=$('#group');g.innerHTML=`<option value="">${t('allConversations')}</option>`+state.groups.map(hash=>`<option value="${esc(hash)}">${esc(hash==='未分组'?t('rootFiles'):contacts[hash]?.name||hash)}</option>`).join('');if(state.groups.includes(scope))g.value=scope;else{scope='';g.value=''}}
-function isScopes(){return !searchQuery&&!inVault&&isWechat()&&groupingMode()==='grouped'&&!scope}
+function isScopes(){return !tagFilter.length&&!searchQuery&&!inVault&&isWechat()&&groupingMode()==='grouped'&&!scope}
 function header(){
  $('#lockVault').hidden=!inVault;
  $('#openVault').disabled=!state.root||!state.updated||state.scanning;
  $('#openVault').classList.toggle('active',inVault);
  $('#scopeFilters').hidden=!scope;$$('#scopeFilters button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scopeKind?scopeKinds.includes(b.dataset.scopeKind):!scopeKinds.length)));
  $('#scopeFilters').setAttribute('aria-label',t('conversationResourceTypesMultipleSelection'));
- syncGroupingControls();syncDatePicker();
+ syncGroupingControls();syncDatePicker();syncTagFilter();
  const title=inVault?(folder?folderName(folder):t('privateSpace')):scope?contactName(scope):star?t('favorites'):labels[kind]||(folder?folderName(folder):t('allResources'));
  $('#summary').textContent=stateSummary();
  $('#title').textContent=title;renderBreadcrumb(page==='settings'?t('settings'):page==='usage'?t('usageOverview'):title);
@@ -464,7 +464,7 @@ function paint(visible){
  }
  const scopes=isScopes();$('#items').className=scopes?'scopes':prefs.view;
  if(scopes){reconcileCards(visible,visible.map(g=>`<article class="scope-card" data-scope="${esc(g.hash)}"><div class="scope-head"><span class="avatar">${g.hash==='未分组'?icon('folder'):contactAvatar(g.hash)}</span><button class="scope-identity" title="${t('openConversation')}"><strong>${esc(contactName(g.hash))}</strong><small>${contacts[g.hash]?esc(contacts[g.hash].type==='group'?t('groupChat'):contacts[g.hash].type==='person'?t('contact'):t('customGroup'))+' · ':''}${g.hash==='未分组'?'':esc(g.hash.slice(0,12))+'…'}</small></button><button ${g.hash==='未分组'?'hidden':''} class="icon scope-bind" aria-label="${t('bindOrEditConversation')}" title="${t('bindOrEditConversation')}">${icon('edit')}</button></div><button class="scope-covers" style="grid-template-columns:repeat(${Math.max(1,g.covers.length)},minmax(0,1fr))" aria-label="${t('browseResourcesIn', {p6: esc(contactName(g.hash))})}">${(g.covers.length?g.covers:[null]).map(scopeCover).join('')}</button><div class="scope-footer"><span>${t('resources', {p8: g.count.toLocaleString(), p9: bytes(g.bytes)})}</span><span>${coverDateFormats.short.format(g.modified)}</span></div><div class="scope-types">${Object.entries(g.counts).map(([k,n])=>`<span data-type="${k}">${icon(kindIcon(k))}${n.toLocaleString()}</span>`).join('')}</div></article>`),true);$$('[data-scope]').forEach(e=>{const hash=e.dataset.scope;e.querySelectorAll('.scope-identity,.scope-covers').forEach(b=>b.onclick=()=>enterScope(hash));e.querySelector('.scope-bind').onclick=()=>showSettings('bindings',hash);e.querySelectorAll('img:not([data-video])').forEach(img=>img.onerror=()=>{const slot=img.parentElement;if(slot.dataset.coverKind==='video'){img.removeAttribute('src');img.dataset.video=slot.dataset.coverId;observeVideoCovers(e)}else if(!retryThumbnail(img,slot.dataset.coverId,slot.dataset.coverModified))slot.innerHTML=icon('image')});e.querySelectorAll('[data-type]').forEach(el=>color(el,el.dataset.type))})}
- else{reconcileCards(visible,visible.map(x=>x.directory?`<article class="asset directory" data-folder="${esc([x.folder,x.name].filter(Boolean).join('/'))}"><button class="cover folder-cover" aria-label="${t('openFolder',{name:esc(x.name)})}">${icon('folder')}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta">${t('folder')}</div><div class="asset-context">${t('folder')}</div></article>`:`<article class="asset" data-id="${x.id}"><input type="checkbox" aria-label="${t('select', {p1: esc(x.name)})}"><button class="cover" aria-label="${t('preview', {p2: esc(x.name)})}">${x.kind==='video'&&!x.preview?`<img data-video="${x.id}" alt="" aria-hidden="true">`:x.preview?`<img data-thumb="thumb/${x.preview}?v=${x.modified}&thumb=2" decoding="async" alt="">` :fileCover(x)}${x.kind==='video'?`<span class="media-kind">${icon('video')+t('video')}</span>`:''}${isWechat()&&x.thumbnail?`<span class="media-kind">${t('thumbnail')}</span>`:''}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta"><span>${bytes(x.size)}${x.star?icon('star'):''}</span><span>${coverDateFormats.short.format(x.modified)}</span></div><div class="asset-context"><span title="${esc(fileContext(x))}">${esc(fileContext(x))}</span><span>${esc(x.tags|| (isWechat()&&x.thumbnail?t('thumbnail'):t('originalFile')))}</span></div><div class="asset-format"><strong>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</strong><span>${esc(labels[x.kind]||t('otherFiles'))}</span></div><div class="asset-size">${bytes(x.size)}</div><time class="asset-modified" datetime="${new Date(x.modified).toISOString()}"><span>${coverDateFormats.date.format(x.modified)}</span><span>${coverDateFormats.time.format(x.modified)}</span></time><div class="asset-flags">${x.star?icon('star'):''}${x.tags?icon('tag'):''}</div></article>`),false);$$('.asset:not(.directory)').forEach(e=>{const x=itemIndex.get(e.dataset.id);color(e,x.kind);e.querySelector('input').onchange=ev=>setSelected(x.id,ev.target.checked);e.onclick=ev=>{
+ else{reconcileCards(visible,visible.map(x=>x.directory?`<article class="asset directory" data-folder="${esc([x.folder,x.name].filter(Boolean).join('/'))}"><button class="cover folder-cover" aria-label="${t('openFolder',{name:esc(x.name)})}">${icon('folder')}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta">${t('folder')}</div><div class="asset-context">${t('folder')}</div></article>`:`<article class="asset" data-id="${x.id}"><input type="checkbox" aria-label="${t('select', {p1: esc(x.name)})}"><button class="cover" aria-label="${t('preview', {p2: esc(x.name)})}">${x.kind==='video'&&!x.preview?`<img data-video="${x.id}" alt="" aria-hidden="true">`:x.preview?`<img data-thumb="thumb/${x.preview}?v=${x.modified}&thumb=2" decoding="async" alt="">` :fileCover(x)}${x.kind==='video'?`<span class="media-kind">${icon('video')+t('video')}</span>`:''}${isWechat()&&x.thumbnail?`<span class="media-kind">${t('thumbnail')}</span>`:''}</button><button class="asset-name" title="${esc(x.name)}">${esc(x.name)}</button><div class="asset-meta"><span>${bytes(x.size)}${x.star?icon('star'):''}${tagDots(x.tags)}</span><span>${coverDateFormats.short.format(x.modified)}</span></div><div class="asset-context">${tagDots(x.tags)}<span class="asset-context-path" title="${esc(fileContext(x))}">${esc(fileContext(x))}</span>${x.tags?'':`<span class="asset-context-kind">${isWechat()&&x.thumbnail?t('thumbnail'):t('originalFile')}</span>`}</div><div class="asset-format"><strong>${esc(x.ext.slice(1).toUpperCase()||'FILE')}</strong><span>${esc(labels[x.kind]||t('otherFiles'))}</span></div><div class="asset-size">${bytes(x.size)}</div><time class="asset-modified" datetime="${new Date(x.modified).toISOString()}"><span>${coverDateFormats.date.format(x.modified)}</span><span>${coverDateFormats.time.format(x.modified)}</span></time><div class="asset-flags">${x.star?icon('star'):''}</div></article>`),false);$$('.asset:not(.directory)').forEach(e=>{const x=itemIndex.get(e.dataset.id);color(e,x.kind);e.querySelector('input').onchange=ev=>setSelected(x.id,ev.target.checked);e.onclick=ev=>{
   if(ev.target.closest('input'))return;
   if(ev.metaKey||ev.ctrlKey){
    ev.preventDefault();
@@ -480,6 +480,7 @@ $('#catalogLoadingMark').append(loadingMark());
 const virtual=new VirtualList($('#resourceScroll'),$('#items'),paint,()=>loadMore(),$('#timelineRail'),compactBytes);
 function emptyFolderView(){return state.root&&(browseFolders()||folder)&&!kind&&!star&&!searchQuery}
 function emptyState(){
+ if(tagFilter.length)return ['noMatchingResources','tryDifferentKeywordsOrChangeTheFilters','clearFilters',()=>setTagFilter([])];
  if(browseTimeline()&&hasDateRange())return ['timelineNoMatchingDates','timelineTryDifferentDates','timelineClearDates',()=>applyDateRange('','')];
  if(emptyFolderView()){
   if(inVault&&!folder)return ['privateEmpty','privateEmptyHint','privateBackToLibrary',()=>leaveVault()];
@@ -531,7 +532,7 @@ $('#loadState').onclick=()=>{if(resultKey!==requestKey||!result.items.length){lo
 async function load({scrollTop,reusePage=false,rebuilding=false}={}){
  listAbort?.abort();listAbort=new AbortController();const v=++version,endpoint=resultEndpoint();loadingMore=true;loadFailed=false;
  const restore=scrollTop??0;
- const p=new URLSearchParams({kind:scope?scopeKinds.join(','):kind,star:star?'1':'0',search:searchQuery,group:scope,folder,private:inVault?'1':'0',sort:listSort(),thumbs:!isWechat()||prefs.thumbs?'1':'0',offset:0,limit:200});
+ const p=new URLSearchParams({kind:scope?scopeKinds.join(','):kind,star:star?'1':'0',search:searchQuery,tagColors:tagFilter.join(','),group:scope,folder,private:inVault?'1':'0',sort:listSort(),thumbs:!isWechat()||prefs.thumbs?'1':'0',offset:0,limit:200});
  if(browseTimeline()){
   if(dateRange.start)p.set('modifiedFrom',new Date(dateRange.start+'T00:00:00').getTime());
   if(dateRange.end){
@@ -828,7 +829,7 @@ function clearCatalog(){
 }
 function resetLibraryView(){
  dateRange={start:'',end:''};
- folder='';scope='';scopeKinds=[];kind='';star=false;offset=0;searchQuery='';$('#group').value='';
+ folder='';scope='';scopeKinds=[];kind='';star=false;offset=0;searchQuery='';tagFilter=[];$('#group').value='';
  clearCatalog();
 }
 function displayVault(value){
@@ -936,7 +937,7 @@ async function openRecentResource({root, id}) {
 }
 function openDetail(item){
  $('#copyImageItem').hidden=item.kind!=='image'||!window.mygo?.call;
- disposePlayer?.();disposePlayer=null;disposeTags?.();detailMetadata?.dispose();detailHistogram?.dispose();detailHistogram=null;const token=++detailVersion;detail={...item};const x=detail;const index=result.items.findIndex(r=>r.id===x.id);color($('#detail'),x.kind);$('#detailBadge').innerHTML=icon(kindIcon(x.kind))+t('resourceDetails');$('#detailType').textContent=(labels[x.kind]||t('other'))+' / '+x.ext.slice(1).toUpperCase();$('#detailName').textContent=x.name;$('#detailName').title=x.name;$('#fullscreenFilename').textContent=x.name;$('#detailSubtitle').replaceChildren();$('#detailSubtitle').hidden=x.kind!=='image';$('#detailPosition').textContent=browseFolders()?`${t('of', {p0: result.items.slice(0,index+1).filter(x=>!x.directory).length, p1: result.fileCount})}`:`${t('of', {p0: index+1, p1: result.total})}`;$('#prevDetail').disabled=!result.items.slice(0,index).some(x=>!x.directory);$('#nextDetail').disabled=!result.items.slice(index+1).some(x=>!x.directory)&&result.items.length>=result.total;renderDetailFavorite(x.star);detailMetadata=mountImageMetadata($('#metadata'),{...x,thumbnail:isWechat()&&x.thumbnail});disposeTags=mountTagEditor($('#tagEditor'),x.tags,async tags=>{await api('mark',{id:x.id,star:x.star,tags});x.tags=tags;load()});$('#detailPath').textContent=x.path;$('#detailPath').title=x.path;
+ disposePlayer?.();disposePlayer=null;disposeTags?.();detailMetadata?.dispose();detailHistogram?.dispose();detailHistogram=null;const token=++detailVersion;detail={...item};const x=detail;const index=result.items.findIndex(r=>r.id===x.id);color($('#detail'),x.kind);$('#detailBadge').innerHTML=icon(kindIcon(x.kind))+t('resourceDetails');$('#detailType').textContent=(labels[x.kind]||t('other'))+' / '+x.ext.slice(1).toUpperCase();$('#detailName').textContent=x.name;$('#detailName').title=x.name;$('#fullscreenFilename').textContent=x.name;$('#detailSubtitle').replaceChildren();$('#detailSubtitle').hidden=x.kind!=='image';$('#detailPosition').textContent=browseFolders()?`${t('of', {p0: result.items.slice(0,index+1).filter(x=>!x.directory).length, p1: result.fileCount})}`:`${t('of', {p0: index+1, p1: result.total})}`;$('#prevDetail').disabled=!result.items.slice(0,index).some(x=>!x.directory);$('#nextDetail').disabled=!result.items.slice(index+1).some(x=>!x.directory)&&result.items.length>=result.total;renderDetailFavorite(x.star);detailMetadata=mountImageMetadata($('#metadata'),{...x,thumbnail:isWechat()&&x.thumbnail});disposeTags=mountTagEditor($('#tagEditor'),x.tags,async tags=>{await api('mark',{id:x.id,tags});x.tags=tags;load()},'detailTagsTitle');$('#detailPath').textContent=x.path;$('#detailPath').title=x.path;
  $('#detailConversation').hidden=!isWechat();
  $('#detailLocationLabel').textContent=isWechat()?t('conversationLabel'):t('containingFolder');
  if(isWechat())$('#detailContact').innerHTML=`<span class="avatar">${x.group==='未分组'?icon('folder'):contactAvatar(x.group)}</span><span><strong>${esc(contactName(x.group))}</strong><small>${esc(contacts[x.group]?.username||x.group.slice(0,16)+'…')}</small></span>${icon('chevron')}`;
@@ -1020,7 +1021,7 @@ async function toggleResourceFavorite(item) {
  button.disabled=true;
  const starred=!item.star;
  try {
-  await api('mark',{id:item.id,star:starred,tags:item.tags});
+  await api('mark',{id:item.id,star:starred});
   item.star=starred;
   if(detail?.id===item.id){
    detail.star=starred;
@@ -1047,50 +1048,159 @@ function confirmResourceTrash(item){
 }
 $('#trashItem').onclick=()=>confirmResourceTrash(detail);
 
-let resourceMenuOpen=false;
+const resourceActions=$('#resourceActions');
+let nativeResourceMenuOpen=false;
+
+document.addEventListener('pointerdown',event=>{
+ if(resourceActions.matches(':popover-open')&&!resourceActions.contains(event.target))resourceActions.hidePopover();
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&resourceActions.matches(':popover-open')){
+  event.preventDefault();
+  resourceActions.hidePopover();
+ }
+});
+const tagFilterButton=$('#tagFilterButton');
+const tagFilterPanel=$('#tagFilterPanel');
+
+function showAnchoredPopover(panel,x,y,source){
+ panel.showPopover({source});
+ const width=panel.offsetWidth;
+ const height=panel.offsetHeight;
+ const maxX=document.documentElement.clientWidth-width-8;
+ const maxY=document.documentElement.clientHeight-height-8;
+ panel.style.left=Math.max(8,Math.min(x,maxX))+'px';
+ panel.style.top=Math.max(8,Math.min(y,maxY))+'px';
+}
+
+function syncTagFilter(){
+ tagFilterButton.querySelector('.tag-filter-dot').innerHTML=tagDots(tagFilter.join(','));
+ tagFilterButton.classList.toggle('active',tagFilter.length>0);
+}
+
+function setTagFilter(colors){
+ if(colors.join(',')===tagFilter.join(','))return;
+ navigate(()=>{
+  tagFilter=colors.toSorted();
+  offset=0;
+  header();
+  void load();
+ });
+}
+
+tagFilterButton.onclick=()=>{
+ if(tagFilterPanel.matches(':popover-open')){tagFilterPanel.hidePopover();return}
+ const palette=createTagPalette(color=>{
+  setTagFilter(tagFilter.includes(color)?tagFilter.filter(value=>value!==color):[...tagFilter,color]);
+  palette.render(tagFilter);
+ },'tagFilterButton');
+ palette.render(tagFilter);
+ tagFilterPanel.replaceChildren(palette.element);
+ const bounds=tagFilterButton.getBoundingClientRect();
+ showAnchoredPopover(tagFilterPanel,bounds.left,bounds.bottom+4,tagFilterButton);
+};
+tagFilterPanel.addEventListener('toggle',()=>{
+ tagFilterButton.setAttribute('aria-expanded',String(tagFilterPanel.matches(':popover-open')));
+});
+
+document.addEventListener('contextmenu',event=>{
+ if(!tagFilterPanel.contains(event.target)&&tagFilterPanel.matches(':popover-open'))tagFilterPanel.hidePopover();
+},true);
+
 $('#items').addEventListener('contextmenu',event=>{
  const card=event.target.closest('.asset[data-id]');
  const item=itemIndex.get(card?.dataset.id);
- if(!item||!window.mygo?.call)return;
+ if(!item)return;
  event.preventDefault();
- if(resourceMenuOpen)return;
+ if(resourceActions.matches(':popover-open'))resourceActions.hidePopover();
  const root=state.root;
  const privateView=inVault;
+ function current(){
+  if(state.root!==root||inVault!==privateView)return null;
+  const indexed=itemIndex.get(item.id);
+  return indexed?.modified===item.modified&&indexed.size===item.size?indexed:null;
+ }
+ async function saveTags(value){
+  if(state.root!==root||inVault!==privateView)throw Error(t('saveFailed'));
+  await api('mark',{id:item.id,tags:value});
+  item.tags=value;
+  if(state.root!==root||inVault!==privateView)return;
+  const indexed=itemIndex.get(item.id);
+  if(indexed)indexed.tags=value;
+  void load({scrollTop:$('#resourceScroll').scrollTop});
+ }
  const keyboard=event.button===0&&!event.ctrlKey;
  const bounds=card.getBoundingClientRect();
  const x=keyboard?bounds.left+12:event.clientX;
  const y=keyboard?bounds.top+12:event.clientY;
- resourceMenuOpen=true;
- void action(async()=>{
-  let command;
-  try {
-   command=await window.mygo.call('ResourceMenu.Show',Math.round(x),Math.round(y),{
-    starred:Boolean(item.star),
-    image:item.kind==='image',
-    copyImageBusy:copyImageButton.disabled,
-    privateView,
-    privacyDisabled:vaultBusy||Boolean(state.scanning)||privateView&&!item.privateEntry,
-    trashBusy,
-   });
-  } finally {
-   resourceMenuOpen=false;
-  }
-  const current=itemIndex.get(item.id);
-  if(state.root!==root||inVault!==privateView||!current||current.modified!==item.modified||current.size!==item.size)return;
-  switch(command){
-   case 'preview': return openDetail(current);
-   case 'favorite': return toggleResourceFavorite(current);
-   case 'copyImage': return copyResourceImage(current);
-   case 'reveal': return api('reveal',{ids:[current.id]});
-   case 'export': return doExport([current.id]);
-   case 'relativePath': return copyResourcePath(current,true);
-   case 'absolutePath': return copyResourcePath(current,false);
-   case 'privacy':
-    if(!privateView||current.privateEntry)return updatePrivacy([current.id],!privateView);
-    return;
-   case 'trash': return confirmResourceTrash(current);
-  }
- });
+ const privacyDisabled=vaultBusy||Boolean(state.scanning)||privateView&&!item.privateEntry;
+ if(window.mygo?.call){
+  if(nativeResourceMenuOpen)return;
+  nativeResourceMenuOpen=true;
+  void action(async()=>{
+   try{
+    const command=await window.mygo.call('ResourceMenu.Show',Math.round(x),Math.round(y),{
+     starred:Boolean(item.star),image:item.kind==='image',copyImageBusy:copyImageButton.disabled,
+     privateView,privacyDisabled,trashBusy,tagColors:tagColors(item.tags),
+    });
+    const resource=current();
+    if(!resource)return;
+    switch(command){
+     case 'preview':return openDetail(resource);
+     case 'favorite':return toggleResourceFavorite(resource);
+     case 'copyImage':return copyResourceImage(resource);
+     case 'reveal':return api('reveal',{ids:[resource.id]});
+     case 'export':return doExport([resource.id]);
+     case 'relativePath':return copyResourcePath(resource,true);
+     case 'absolutePath':return copyResourcePath(resource,false);
+     case 'privacy':if(!privacyDisabled)return updatePrivacy([resource.id],!privateView);return;
+     case 'trash':return confirmResourceTrash(resource);
+     default:
+      if(command?.startsWith('tag:'))await saveTags(toggleTagColor(resource.tags,command.slice(4)));
+    }
+   }finally{
+    nativeResourceMenuOpen=false;
+   }
+  });
+  return;
+ }
+ const rows=document.createElement('div');
+ rows.className='resource-action-rows';
+
+ function add(label,glyph,run,disabled=false){
+  const button=document.createElement('button');
+  button.type='button';
+  button.innerHTML=icon(glyph);
+  button.append(label);
+  button.disabled=disabled;
+  button.onclick=()=>{
+   resourceActions.hidePopover();
+   const resource=current();
+   if(resource)void action(()=>run(resource));
+  };
+  rows.append(button);
+ }
+ function separator(){
+  const line=document.createElement('hr');
+  rows.append(line);
+ }
+
+ add(t('resourceMenu.preview'),'file',openDetail);
+ add(item.star?t('resourceMenu.unfavorite'):t('favorite'),'star',toggleResourceFavorite);
+ if(item.kind==='image')add(t('copyImage'),'copy',copyResourceImage,copyImageButton.disabled);
+ separator();
+ add(t('export'),'export',resource=>doExport([resource.id]));
+ add(t('copyRelativePath'),'path',resource=>copyResourcePath(resource,true));
+ add(t('copyAbsolutePath'),'copy',resource=>copyResourcePath(resource,false));
+ separator();
+ add(privateView?t('resourceMenu.removePrivacy'):t('privateAddItem'),'lock',resource=>updatePrivacy([resource.id],!privateView),privacyDisabled);
+
+ const tags=document.createElement('div');
+ tags.className='resource-action-tags';
+ mountTagEditor(tags,item.tags,saveTags);
+ resourceActions.replaceChildren(rows,tags);
+ showAnchoredPopover(resourceActions,x,y,card.querySelector('.cover'));
+ if(keyboard)rows.querySelector('button')?.focus({preventScroll:true});
 });
 trashDialog.addEventListener('cancel',event=>{if(trashBusy)event.preventDefault()});
 trashDialog.addEventListener('close',()=>{if(!trashDialog.open)trashTarget=null});

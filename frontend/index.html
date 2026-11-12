@@ -53,7 +53,7 @@
   <button type="button" id="timelineClearDates" data-i18n="timelineClearDates" hidden>清除筛选</button>
  </div>
 </div>
-</details><div class="view-controls"><button id="gridView" class="icon active" title="网格视图" aria-label="网格视图" data-icon="grid" data-i18n-title="gridView" data-i18n-aria-label="gridView"></button><button id="listView" class="icon" title="列表视图" aria-label="列表视图" data-icon="list" data-i18n-title="listView" data-i18n-aria-label="listView"></button></div></div><div id="scopeFilters" class="scope-filters" role="group" aria-label="会话资源类型，可多选" hidden data-i18n-aria-label="conversationResourceTypesMultipleSelection"><button data-scope-kind="" aria-pressed="true" data-i18n="allTypes">全部类型</button><button data-scope-kind="image" aria-pressed="false" data-i18n="images">图片</button><button data-scope-kind="video" aria-pressed="false" data-i18n="videos">视频</button><button data-scope-kind="audio" aria-pressed="false" data-i18n="audio">音频</button><button data-scope-kind="document" aria-pressed="false" data-i18n="documents">文档</button><button data-scope-kind="other" aria-pressed="false" data-i18n="other">其他</button><span data-i18n="multipleSelection">可多选</span></div></div>
+</details><button id="tagFilterButton" type="button" aria-controls="tagFilterPanel" aria-expanded="false"><i data-icon="tag" aria-hidden="true"></i><span data-i18n="filterTags">筛选标签</span><span class="tag-filter-dot"></span></button><div class="view-controls"><button id="gridView" class="icon active" title="网格视图" aria-label="网格视图" data-icon="grid" data-i18n-title="gridView" data-i18n-aria-label="gridView"></button><button id="listView" class="icon" title="列表视图" aria-label="列表视图" data-icon="list" data-i18n-title="listView" data-i18n-aria-label="listView"></button></div></div><div id="scopeFilters" class="scope-filters" role="group" aria-label="会话资源类型，可多选" hidden data-i18n-aria-label="conversationResourceTypesMultipleSelection"><button data-scope-kind="" aria-pressed="true" data-i18n="allTypes">全部类型</button><button data-scope-kind="image" aria-pressed="false" data-i18n="images">图片</button><button data-scope-kind="video" aria-pressed="false" data-i18n="videos">视频</button><button data-scope-kind="audio" aria-pressed="false" data-i18n="audio">音频</button><button data-scope-kind="document" aria-pressed="false" data-i18n="documents">文档</button><button data-scope-kind="other" aria-pressed="false" data-i18n="other">其他</button><span data-i18n="multipleSelection">可多选</span></div></div>
 <div class="library-results">
 <nav id="timelineRail" class="timeline-rail" aria-label="时间节点" data-i18n-aria-label="timelineRailLabel" hidden>
  <div class="timeline-ticks"></div>
@@ -93,6 +93,8 @@
   <div class="command-keys" aria-hidden="true"><span><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="commandMove">移动</span></span><span><kbd>↵</kbd> <span data-i18n="commandRun">打开</span></span></div>
  </div>
 </dialog>
+<div id="resourceActions" class="resource-popover" popover="manual" role="group" data-i18n-aria-label="resourceActions" aria-label="资源操作"></div>
+<div id="tagFilterPanel" class="resource-popover" popover="auto" role="group" aria-labelledby="tagFilterButton"></div>
 <dialog id="detail"><div class="detail-header"><div class="detail-preview-heading"><span id="detailBadge"></span><button id="previewFullscreen" type="button" class="icon" aria-label="全屏预览" title="全屏预览" aria-pressed="false" data-icon="fullscreenEnter"></button><span id="fullscreenFilename"></span></div><kbd id="fullscreenHint" aria-hidden="true">Esc</kbd><div class="detail-nav"><span id="detailPosition"></span><button id="prevDetail" class="icon" aria-label="上一个资源" data-icon="back" data-i18n-aria-label="previousResource"></button><button id="nextDetail" class="icon" aria-label="下一个资源" data-icon="chevron" data-i18n-aria-label="nextResource"></button><button id="closeDetail" class="icon" aria-label="关闭详情" data-icon="close" data-i18n-aria-label="closeDetails"></button></div></div><div class="detail-layout"><div class="preview-column"><div id="preview"></div></div><aside class="detail-info"><div class="detail-summary-head">
 <div class="detail-type-row"><div id="detailType"></div><div class="detail-status-actions">
 <button id="copyImageItem" type="button" class="icon" data-i18n-aria-label="copyImage" data-i18n-title="copyImage" hidden><i data-icon="copy"></i></button>
@@ -107,7 +109,10 @@
 <div id="detailHistogram" class="detail-section histogram-section" hidden></div>
 <div class="detail-section"><h3 data-i18n="fileInformation">文件信息</h3><div id="metadata"></div></div>
 <div id="detailConversation" class="detail-section" hidden><h3 id="detailLocationLabel" data-i18n="conversationLabel">所属会话</h3><button id="detailContact" class="contact-link"></button></div>
-<div class="detail-section tag-section"><div id="tagEditor"></div></div>
+<section class="detail-section tag-section" aria-labelledby="detailTagsTitle">
+ <h3 id="detailTagsTitle" data-i18n="tags">标签</h3>
+ <div id="tagEditor"></div>
+</section>
 </aside></div></dialog>
 <dialog id="trashDialog" class="feature-dialog trash-dialog" aria-labelledby="trashTitle" aria-describedby="trashFilename trashDescription">
  <h2 id="trashTitle" data-i18n="trashFile">删除文件</h2>
