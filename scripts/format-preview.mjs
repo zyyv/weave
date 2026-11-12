@@ -6,7 +6,8 @@ const source=readFileSync(0,'utf8');
 if(extension==='.json'){
  try{JSON.parse(source)}catch{process.exit(2)}
 }
-const result=await format('preview'+extension,source,{
+// The HTML formatter handles inline SVG markup, but does not recognize .svg filenames.
+const result=await format('preview'+(extension==='.svg'?'.html':extension),source,{
  tabWidth:2,sortImports:false,sortPackageJson:false,sortTailwindcss:false,
 });
 if(result.errors.some(error=>error.severity==='Error'))process.exit(2);

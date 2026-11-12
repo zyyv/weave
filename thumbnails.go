@@ -7,13 +7,15 @@ import (
 	"fmt"
 	"image"
 	_ "image/gif"
-	_ "image/jpeg"
+	"image/jpeg"
 	"image/png"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 	"weave/internal/library"
@@ -49,6 +51,16 @@ func (t *thumbnailCache) serve(w http.ResponseWriter, r *http.Request, lib *libr
 	x, err := lib.Item(id, vaultCookie(r))
 	if err != nil || x.Kind != "image" {
 		http.NotFound(w, r)
+		return
+	}
+	if x.Ext == ".svg" {
+		f, item, err := lib.Open(id, vaultCookie(r))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		serveSVG(w, r, f, item)
 		return
 	}
 	key := thumbnailKey(x)
@@ -154,13 +166,73 @@ func orientedImage(src image.Image, width, height, orientation int) image.Image 
 	return dst
 }
 
-// sips writes only to a private temporary output, never to the source path.
+func serveSVG(w http.ResponseWriter, r *http.Request, file *os.File, item library.Item) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	// A directly opened SVG must also run without scripts or access to the app origin.
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'")
+	http.ServeContent(w, r, item.Name, time.UnixMilli(item.Modified), file)
+}
+
+func (t *thumbnailCache) serveRasterPreview(w http.ResponseWriter, r *http.Request, lib *library.Library, id string, message func(string) string) {
+	f, item, err := lib.Open(id, vaultCookie(r))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	f.Close()
+	switch item.Ext {
+	case ".arw", ".avif", ".heic":
+	default:
+		http.Error(w, message("errors.previewFormat"), http.StatusUnsupportedMediaType)
+		return
+	}
+	select {
+	case t.slots <- struct{}{}:
+		defer func() { <-t.slots }()
+	case <-r.Context().Done():
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	src, orientation, err := nativeRaster(ctx, item.Path, 2400)
+	if err != nil {
+		http.Error(w, message("errors.previewFormat"), http.StatusUnsupportedMediaType)
+		return
+	}
+	var buf bytes.Buffer
+	if orientation != 1 {
+		src = orientedImage(src, src.Bounds().Dx(), src.Bounds().Dy(), orientation)
+	}
+	if err := png.Encode(&buf, src); err != nil {
+		http.Error(w, message("errors.previewFormat"), http.StatusInternalServerError)
+		return
+	}
+	if _, err := lib.Item(id, vaultCookie(r)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Write(buf.Bytes())
+}
+
 func nativeThumbnail(ctx context.Context, path string) (image.Image, int, error) {
+	return nativeRaster(ctx, path, 384)
+}
+
+// sips writes only to a private temporary output, never to the source path.
+func nativeRaster(ctx context.Context, path string, limit int) (image.Image, int, error) {
 	orientation := 1
 	if f, err := os.Open(path); err == nil {
 		header, _ := io.ReadAll(io.LimitReader(f, 1024*1024))
-		f.Close()
 		orientation = imageOrientation(header)
+		if strings.EqualFold(filepath.Ext(path), ".arw") {
+			preview := embeddedRAWPreview(f, header, limit)
+			if preview != nil {
+				f.Close()
+				return preview, orientation, nil
+			}
+		}
+		f.Close()
 	}
 	dir, err := os.MkdirTemp("", "weave-thumb-")
 	if err != nil {
@@ -169,19 +241,75 @@ func nativeThumbnail(ctx context.Context, path string) (image.Image, int, error)
 	defer os.RemoveAll(dir)
 	output := dir + "/preview.png"
 	// sips preserves the stored pixel direction; apply EXIF once ourselves below.
-	if err := exec.CommandContext(ctx, "/usr/bin/sips", "-Z", "384", "-s", "format", "png", path, "--out", output).Run(); err != nil {
+	if err := exec.CommandContext(ctx, "/usr/bin/sips", "-Z", fmt.Sprint(limit), "-s", "format", "png", path, "--out", output).Run(); err != nil {
 		return nil, 0, err
 	}
 	data, err := os.ReadFile(output)
 	if err != nil {
 		return nil, 0, err
 	}
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 384 || cfg.Height > 384 {
-		return nil, 0, fmt.Errorf("invalid thumbnail dimensions")
+	cfg, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > limit || cfg.Height > limit {
+		return nil, 0, fmt.Errorf("invalid preview dimensions")
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, err := png.Decode(bytes.NewReader(data))
 	return img, orientation, err
+}
+
+// Sony ARW files can contain a camera-rendered JPEG in their TIFF directories.
+func embeddedRAWPreview(file io.ReaderAt, header []byte, limit int) image.Image {
+	order, offset := tiffHeader(header)
+	if order == nil {
+		return nil
+	}
+	type jpegPreview struct{ start, size uint32 }
+	var candidates []jpegPreview
+	for range 8 {
+		if offset == 0 || offset+2 > uint64(len(header)) {
+			break
+		}
+		count := uint64(order.Uint16(header[offset:]))
+		end := offset + 2 + count*12
+		if end+4 > uint64(len(header)) {
+			break
+		}
+		var candidate jpegPreview
+		for pos := offset + 2; pos < end; pos += 12 {
+			entry := header[pos : pos+12]
+			if order.Uint16(entry[2:]) != 4 || order.Uint32(entry[4:]) != 1 {
+				continue
+			}
+			switch order.Uint16(entry) {
+			case 513: // JPEGInterchangeFormat
+				candidate.start = order.Uint32(entry[8:])
+			case 514: // JPEGInterchangeFormatLength
+				candidate.size = order.Uint32(entry[8:])
+			}
+		}
+		if candidate.start != 0 && candidate.size > 0 && candidate.size <= 32<<20 {
+			candidates = append(candidates, candidate)
+		}
+		offset = uint64(order.Uint32(header[end:]))
+	}
+	slices.SortFunc(candidates, func(a, b jpegPreview) int { return int(b.size) - int(a.size) })
+	for _, candidate := range candidates {
+		reader := io.NewSectionReader(file, int64(candidate.start), int64(candidate.size))
+		cfg, err := jpeg.DecodeConfig(reader)
+		if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > 64<<20 {
+			continue
+		}
+		reader.Seek(0, io.SeekStart)
+		preview, err := jpeg.Decode(reader)
+		if err != nil {
+			continue
+		}
+		scale := min(1.0, float64(limit)/float64(max(cfg.Width, cfg.Height)))
+		if scale == 1 {
+			return preview
+		}
+		return orientedImage(preview, max(1, int(float64(cfg.Width)*scale)), max(1, int(float64(cfg.Height)*scale)), 1)
+	}
+	return nil
 }
 
 // EXIF is presentation metadata. Read it before conversion, because sips drops
@@ -215,6 +343,9 @@ func imageOrientation(data []byte) int {
 			pos += size
 		}
 	}
+	if bytes.HasPrefix(data, []byte("II\x2a\x00")) || bytes.HasPrefix(data, []byte("MM\x00\x2a")) {
+		return tiffOrientation(data)
+	}
 	if bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")) {
 		for pos := 8; pos+12 <= len(data); {
 			size := uint64(binary.BigEndian.Uint32(data[pos : pos+4]))
@@ -230,9 +361,9 @@ func imageOrientation(data []byte) int {
 	}
 	return 1
 }
-func tiffOrientation(data []byte) int {
+func tiffHeader(data []byte) (binary.ByteOrder, uint64) {
 	if len(data) < 8 {
-		return 1
+		return nil, 0
 	}
 	var order binary.ByteOrder
 	switch string(data[:2]) {
@@ -241,12 +372,19 @@ func tiffOrientation(data []byte) int {
 	case "MM":
 		order = binary.BigEndian
 	default:
-		return 1
+		return nil, 0
 	}
 	if order.Uint16(data[2:4]) != 42 {
+		return nil, 0
+	}
+	return order, uint64(order.Uint32(data[4:8]))
+}
+
+func tiffOrientation(data []byte) int {
+	order, offset := tiffHeader(data)
+	if order == nil {
 		return 1
 	}
-	offset := uint64(order.Uint32(data[4:8]))
 	if offset+2 > uint64(len(data)) {
 		return 1
 	}

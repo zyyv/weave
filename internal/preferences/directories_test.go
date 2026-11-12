@@ -15,7 +15,7 @@ func TestDirectoryHistoryPreservesAliasesAndLastRoot(t *testing.T) {
 	if err := s.ImportDirectory(first); err != nil {
 		t.Fatal(err)
 	}
-	for _, root := range []string{first, second, first} {
+	for _, root := range []string{first, second, first, second} {
 		if err := s.OpenDirectory(root); err != nil {
 			t.Fatal(err)
 		}
@@ -30,7 +30,7 @@ func TestDirectoryHistoryPreservesAliasesAndLastRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	last, dirs := s.Directories()
-	if last != first || len(dirs) != 2 || dirs[0].Path != first || dirs[0].Name != "Archive" || dirs[0].LastOpened == 0 || dirs[1].Path != second {
+	if last != second || len(dirs) != 2 || dirs[0].Path != first || dirs[0].Name != "Archive" || dirs[0].LastOpened == 0 || dirs[1].Path != second {
 		t.Fatalf("unexpected directory history: %q %+v", last, dirs)
 	}
 }
@@ -64,7 +64,7 @@ func TestEditingActiveDirectoryPathClearsSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	last, history := s.Directories()
-	if last != "" || len(history) != 1 || history[0] != (Directory{Path: offline, Name: "Offline archive", LastOpened: before[0].LastOpened}) {
+	if last != "" || len(history) != 1 || history[0] != (Directory{Path: offline, Name: "Offline archive", LastOpened: before[1].LastOpened}) {
 		t.Fatalf("unexpected current root or history: %q %+v", last, history)
 	}
 }

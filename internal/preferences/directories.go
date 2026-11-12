@@ -49,13 +49,12 @@ func (s *Store) OpenDirectory(root string) error {
 	d.DirectorySelectionSaved = true
 	d.LastDirectory = root
 	d.Directories = slices.Clone(d.Directories)
-	entry := Directory{Path: root, LastOpened: time.Now().UnixMilli()}
+	now := time.Now().UnixMilli()
 	if i := slices.IndexFunc(d.Directories, func(dir Directory) bool { return dir.Path == root }); i >= 0 {
-		entry.Name = d.Directories[i].Name
-		entry.Pinned = d.Directories[i].Pinned
-		d.Directories = slices.Delete(d.Directories, i, i+1)
+		d.Directories[i].LastOpened = now
+	} else {
+		d.Directories = append(d.Directories, Directory{Path: root, LastOpened: now})
 	}
-	d.Directories = append([]Directory{entry}, d.Directories...)
 	return s.save(d)
 }
 

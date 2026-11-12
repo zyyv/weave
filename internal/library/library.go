@@ -106,11 +106,8 @@ func IsTextExtension(ext string) bool {
 }
 
 func kind(ext string) string {
-	if IsTextExtension(ext) {
-		return "document"
-	}
 	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".pic", ".record_thumb":
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".pic", ".record_thumb", ".avif", ".arw", ".svg":
 		return "image"
 	case ".mp4", ".mov", ".m4v", ".avi", ".webm":
 		return "video"
@@ -119,6 +116,9 @@ func kind(ext string) string {
 	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx":
 		return "document"
 	default:
+		if IsTextExtension(ext) {
+			return "document"
+		}
 		return "other"
 	}
 }
@@ -263,8 +263,7 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 				group = "未分组"
 			}
 			ext := strings.ToLower(filepath.Ext(path))
-			hash := sha256.Sum256([]byte(path))
-			id := hex.EncodeToString(hash[:12])
+			id := pathID(path)
 			thumb := strings.Contains(d.Name(), "_thumb") || ext == ".record_thumb"
 			byPath[path] = len(items)
 			parent := filepath.ToSlash(filepath.Dir(rel))
@@ -279,25 +278,8 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 			}
 			return nil
 		})
-		for i := range items {
-			p := strings.TrimSuffix(items[i].Path, items[i].Ext) + "_thumb.jpg"
-			if j, ok := byPath[p]; ok {
-				items[i].Preview = items[j].ID
-			}
-			if items[i].Kind == "image" && items[i].Preview == "" {
-				items[i].Preview = items[i].ID
-			}
-		}
-		sort.Slice(items, func(i, j int) bool {
-			if items[i].Modified == items[j].Modified {
-				return items[i].Path < items[j].Path
-			}
-			return items[i].Modified > items[j].Modified
-		})
-		ids := map[string]int{}
-		for i, x := range items {
-			ids[x.ID] = i
-		}
+		linkPreviews(items, byPath)
+		ids := orderItems(items)
 		l.mu.Lock()
 		defer l.mu.Unlock()
 		if err == nil && onOpen != nil {
@@ -427,6 +409,38 @@ func (l *Library) item(id string, tokens []string) (Item, error) {
 	x.Tags = m.Tags
 	return x, nil
 }
+func pathID(path string) string {
+	hash := sha256.Sum256([]byte(path))
+	return hex.EncodeToString(hash[:12])
+}
+
+func linkPreviews(items []Item, byPath map[string]int) {
+	for i := range items {
+		item := &items[i]
+		item.Preview = ""
+		path := strings.TrimSuffix(item.Path, item.Ext) + "_thumb.jpg"
+		if j, ok := byPath[path]; ok {
+			item.Preview = items[j].ID
+		} else if item.Kind == "image" {
+			item.Preview = item.ID
+		}
+	}
+}
+
+func orderItems(items []Item) map[string]int {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Modified == items[j].Modified {
+			return items[i].Path < items[j].Path
+		}
+		return items[i].Modified > items[j].Modified
+	})
+	ids := make(map[string]int, len(items))
+	for i, item := range items {
+		ids[item.ID] = i
+	}
+	return ids
+}
+
 func (l *Library) Open(id string, tokens ...string) (*os.File, Item, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -449,10 +463,25 @@ func (l *Library) Mark(id string, m Mark, tokens ...string) error {
 }
 
 func (l *Library) UpdateMark(id string, star *bool, tags *string, tokens ...string) error {
+	return l.UpdateEntryMark("", id, star, tags, tokens...)
+}
+
+func (l *Library) UpdateEntryMark(root, id string, star *bool, tags *string, tokens ...string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	i, ok := l.ids[id]
-	if !ok || !l.canRead(id, tokens) {
+	directory := strings.HasPrefix(id, folderPrefix)
+	if directory {
+		if !l.editableRoot(root) {
+			return os.ErrNotExist
+		}
+		folder, err := l.folderItem(id, tokens)
+		if err != nil {
+			return err
+		}
+		id = folderMarkID(folder.Path)
+		star = nil
+	} else if !ok || !l.canRead(id, tokens) {
 		return os.ErrNotExist
 	}
 	previous := l.marks[id]
@@ -471,19 +500,11 @@ func (l *Library) UpdateMark(id string, star *bool, tags *string, tokens ...stri
 		next[k] = v
 	}
 	next[id] = m
-	b, e := json.Marshal(next)
-	if e != nil {
+	if e := l.saveMarks(next); e != nil {
 		return e
 	}
-	tmp := l.stateFile + ".tmp"
-	if e = os.WriteFile(tmp, b, 0600); e != nil {
-		return e
-	}
-	if e = os.Rename(tmp, l.stateFile); e != nil {
-		return e
-	}
-	item := l.items[i]
-	if previous.Star != m.Star && l.vault.items[id] == "" {
+	if !directory && previous.Star != m.Star && l.vault.items[id] == "" {
+		item := l.items[i]
 		delta := int64(-1)
 		if m.Star {
 			delta = 1
@@ -499,12 +520,38 @@ func (l *Library) UpdateMark(id string, star *bool, tags *string, tokens ...stri
 	l.resetCache()
 	return nil
 }
+func (l *Library) saveMarks(next map[string]Mark) error {
+	b, e := json.Marshal(next)
+	if e != nil {
+		return e
+	}
+	tmp := l.stateFile + ".tmp"
+	if e = os.WriteFile(tmp, b, 0600); e != nil {
+		return e
+	}
+	if e = os.Rename(tmp, l.stateFile); e != nil {
+		return e
+	}
+	return nil
+}
+
 func (l *Library) Export(ids []string, dest string, tokens ...string) (int, error) {
+	return l.ExportEntries(l.Status().Root, ids, dest, tokens...)
+}
+
+func (l *Library) ExportEntries(root string, ids []string, dest string, tokens ...string) (int, error) {
 	if len(ids) == 0 || len(ids) > 200 {
 		return 0, fmt.Errorf("每次请选择 1–200 个资源")
 	}
 	n := 0
 	for _, id := range ids {
+		if strings.HasPrefix(id, folderPrefix) {
+			if err := l.exportFolder(root, id, dest, tokens); err != nil {
+				return n, err
+			}
+			n++
+			continue
+		}
 		f, x, e := l.Open(id, tokens...)
 		if e != nil {
 			return n, e

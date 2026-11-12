@@ -9296,7 +9296,7 @@ System.register("viewer", ["core/errors", "ppt/parser", "ppt/constants", "render
             }
         ],
         execute: function () {
-            viewerCss = `.pptjs-viewer{position:relative;display:grid;place-items:center;width:100%;height:100%;min-height:240px;overflow:hidden;outline:none}.pptjs-viewer:focus-visible{outline:2px solid #2563eb;outline-offset:-2px}.pptjs-stage{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}.pptjs-stage>.pptjs-slide,.pptjs-transition-old>.pptjs-slide{width:100%;height:100%;max-width:100%;max-height:100%}.pptjs-transition-old{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}.pptjs-empty{font:14px/1.6 system-ui,sans-serif;color:#64748b;padding:24px;text-align:center}`;
+            viewerCss = `.pptjs-viewer{position:relative;display:grid;place-items:center;width:100%;height:100%;min-height:240px;overflow:hidden;outline:none}.pptjs-stage{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}.pptjs-stage>.pptjs-slide,.pptjs-transition-old>.pptjs-slide{width:100%;height:100%;max-width:100%;max-height:100%}.pptjs-transition-old{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}.pptjs-empty{font:14px/1.6 system-ui,sans-serif;color:#64748b;padding:24px;text-align:center}`;
             abort = () => new DOMException('The presentation load was cancelled', 'AbortError');
         }
     };

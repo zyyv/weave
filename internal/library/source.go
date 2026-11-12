@@ -85,6 +85,8 @@ func (l *Library) Browse(q Query, folder string) Result {
 	for rel, d := range l.folders {
 		nameMatch := q.Search != "" && q.Kind == "" && q.TagColors == "" && !q.Star && strings.Contains(strings.ToLower(rel), strings.ToLower(q.Search))
 		if d.Folder == folder && l.folderVisible(rel, q.Private) && (!filtered || dirs[rel] || nameMatch) {
+			d.Path = filepath.Join(l.state.Root, rel)
+			d.Tags = l.marks[folderMarkID(d.Path)].Tags
 			d.PrivateEntry = q.Private && l.vault.records[l.state.Root].Paths[rel]
 			entries = append(entries, d)
 		}

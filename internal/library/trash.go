@@ -20,18 +20,8 @@ func (l *Library) Trash(root, id string, size, modified int64, move func(string)
 	if err != nil {
 		return err
 	}
-	resolved, err := filepath.EvalSymlinks(x.Path)
-	if err != nil {
+	if err := validateFile(x, size, modified); err != nil {
 		return err
-	}
-	info, err := os.Lstat(x.Path)
-	if err != nil {
-		return err
-	}
-	if resolved != x.Path || !info.Mode().IsRegular() ||
-		size != x.Size || modified != x.Modified ||
-		info.Size() != size || info.ModTime().UnixMilli() != modified {
-		return errors.New("文件已变化，请重新扫描后重试")
 	}
 
 	// Trashing a private original must not expose its remaining thumbnail.
@@ -77,5 +67,22 @@ func (l *Library) Trash(root, id string, size, modified int64, move func(string)
 	}
 	l.reindex()
 	l.state.Updated = max(l.state.Updated+1, time.Now().UnixMilli())
+	return nil
+}
+
+func validateFile(x Item, size, modified int64) error {
+	resolved, err := filepath.EvalSymlinks(x.Path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Lstat(x.Path)
+	if err != nil {
+		return err
+	}
+	if resolved != x.Path || !info.Mode().IsRegular() ||
+		size != x.Size || modified != x.Modified ||
+		info.Size() != size || info.ModTime().UnixMilli() != modified {
+		return errors.New("文件已变化，请重新扫描后重试")
+	}
 	return nil
 }

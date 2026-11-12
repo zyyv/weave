@@ -11,6 +11,7 @@ const names = {
   sidebar: 'sidebar-left', folder: 'folder-01', chevron: 'arrow-right-01',
   down: 'arrow-down-01', back: 'arrow-left-01', arrowLeft: 'arrow-left-02',
   arrowRight: 'arrow-right-02', grid: 'grid-view', image: 'image-01',
+  code: 'code', view: 'view',
   video: 'video-01', audio: 'music-note-01', file: 'file-01', box: 'package',
   star: 'star', lock: 'square-lock-01', unlock: 'square-unlock-01', refresh: 'refresh', export: 'upload-01',
   import: 'download-01', search: 'search-01', list: 'left-to-right-list-bullet',

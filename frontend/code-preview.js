@@ -34,7 +34,13 @@ function appendTokens(target,tokens){
  }
 }
 
-export async function mountCodePreview(root,item,source,{language,truncated,canFormat,signal}){
+export async function mountCodePreview(root,item,source,{language,truncated,canFormat,autoFormat,signal}){
+ let initialSource=source,formatError;
+ if(autoFormat&&canFormat&&!truncated){
+  try{initialSource=await formatSource(item,source,signal)}
+  catch(error){formatError=error instanceof TypeError?t('codeFormatterFailed'):error.message}
+ }
+ if(signal.aborted)return;
  let prism;
  try{prism=(await import('./vendor/prism/prism.mjs')).default}catch{}
  if(signal.aborted)return;
@@ -49,7 +55,9 @@ export async function mountCodePreview(root,item,source,{language,truncated,canF
  const status=document.createElement('p');
  status.className='code-status';
  status.setAttribute('role','status');
- status.hidden=true;
+ status.hidden=!truncated&&!formatError;
+ if(truncated)status.textContent=t('codePreviewTruncated');
+ else if(formatError)status.textContent=formatError;
  const surface=document.createElement('div');
  surface.className='code-surface';
  surface.tabIndex=0;
@@ -71,8 +79,8 @@ export async function mountCodePreview(root,item,source,{language,truncated,canF
   }
   code.textContent=text;
  }
- display(source);
- if(canFormat){
+ display(initialSource);
+ if(canFormat&&!autoFormat){
   const button=document.createElement('button');
   button.type='button';
   button.textContent=t('formatCodePreview');
@@ -97,6 +105,7 @@ export async function mountCodePreview(root,item,source,{language,truncated,canF
   };
   toolbar.append(button);
  }
- viewer.append(toolbar,status,surface);
+ if(!autoFormat)viewer.append(toolbar);
+ viewer.append(status,surface);
  root.replaceChildren(viewer);
 }

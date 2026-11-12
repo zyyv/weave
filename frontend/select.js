@@ -44,10 +44,25 @@ function layout(){
  if(!active)return;
  const r=controls.get(active).getBoundingClientRect();measure.font='13px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
  const longest=Math.max(0,...filtered.map(o=>measure.measureText(o.textContent).width));
- const width=Math.min(Math.max(query.hidden?0:220,active.dataset.optionDetails?350:0,r.width,longest+64),620,innerWidth-16);
+ const width=Math.min(Math.ceil(Math.max(query.hidden?0:220,active.dataset.optionDetails?350:0,r.width,longest+66)),620,innerWidth-16);
  panel.style.width=width+'px';panel.style.left=Math.max(8,Math.min(r.left,innerWidth-width-8))+'px';
  let top=0;const available=width-64;
- rows=filtered.map(option=>{let lines=1,lineWidth=0;for(const char of option.textContent){const w=measure.measureText(char).width;if(char==='\n'||lineWidth+w>available){lines++;lineWidth=char==='\n'?0:w}else lineWidth+=w}const height=Math.max(38,lines*20+16+(option.dataset.description?18:0)),row={option,top,height};top+=height+optionGap;return row});totalHeight=Math.max(0,top-optionGap);
+ rows=filtered.map(option=>{
+  const label=option.textContent;
+  let lines=1;
+  if(measure.measureText(label).width>available){
+   let line='';
+   for(const char of label){
+    if(line&&measure.measureText(line+char).width>available){lines++;line=char}
+    else line+=char;
+   }
+  }
+  const height=Math.max(38,lines*20+16+(option.dataset.description?18:0));
+  const row={option,top,height};
+  top+=height+optionGap;
+  return row;
+ });
+ totalHeight=Math.max(0,top-optionGap);
  const below=innerHeight-r.bottom-12,above=r.top-12,space=Math.max(below,above),searchHeight=query.hidden?0:44;
  const cap=Math.min(320,Math.max(38,space-searchHeight-14));const fitted=rows.filter(row=>row.top+row.height<=cap).at(-1);const listHeight=totalHeight<=cap?Math.max(38,totalHeight):fitted?fitted.top+fitted.height:cap;
  viewport.style.height=listHeight+'px';const height=listHeight+searchHeight+14;

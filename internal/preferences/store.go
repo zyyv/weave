@@ -9,6 +9,8 @@ import (
 )
 
 type Preferences struct {
+	SVGSource          bool    `json:"svgSource"`
+	ImageCheckerboard  bool    `json:"imageCheckerboard"`
 	SetupTourDismissed bool    `json:"setupTourDismissed"`
 	Locale             string  `json:"locale"`
 	SidebarCollapsed   bool    `json:"sidebarCollapsed"`

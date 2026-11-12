@@ -20,7 +20,7 @@ var formatSlots = make(chan struct{}, 2)
 func canFormatSource(ext string) bool {
 	switch ext {
 	case ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx",
-		".html", ".htm", ".css", ".scss", ".less", ".json", ".jsonc", ".json5",
+		".html", ".htm", ".svg", ".css", ".scss", ".less", ".json", ".jsonc", ".json5",
 		".yaml", ".yml", ".toml", ".graphql", ".gql", ".vue", ".mdx":
 		return true
 	default:

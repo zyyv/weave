@@ -81,7 +81,8 @@ export class VirtualList {
   if(!this.options)return;const {scopes,list,compact,group}=this.options,width=this.root.clientWidth;
   if(width!==this.width)this.heights.clear();
   this.width=width;
-  this.columns=list?1:Math.max(1,Math.floor((width+16)/((scopes?270:compact?130:158)+16)));this.gap=list?0:16;this.height=scopes?(compact?200:228):list?88:compact?175:210;
+  this.columns=list?1:Math.max(1,Math.floor((width+16)/((scopes?270:compact?130:158)+16)));this.gap=list?0:16;const cardWidth=(width-(this.columns-1)*this.gap)/this.columns;
+  this.height=scopes?(compact?200:228):list?88:Math.ceil(cardWidth+50);
   this.rows=[];this.groups=[];
   let top=0,bucket=[],dayKey;
   const formatter=group?new Intl.DateTimeFormat(getLocale(),{year:'numeric',month:'long',day:'numeric'}):null;

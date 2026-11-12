@@ -19,6 +19,9 @@ type resourceMenu struct {
 }
 
 type resourceMenuState struct {
+	Directory       bool     `json:"directory"`
+	Background      bool     `json:"background"`
+	RenameDisabled  bool     `json:"renameDisabled"`
 	Starred         bool     `json:"starred"`
 	Image           bool     `json:"image"`
 	CopyImageBusy   bool     `json:"copyImageBusy"`
@@ -46,6 +49,10 @@ func (m resourceMenu) Show(ctx context.Context, x, y int, state resourceMenuStat
 			Click: func(*mygo.MenuItem, *mygo.Window) { chosen = id },
 		}
 	}
+	if state.Background {
+		mygo.NewMenu([]*mygo.MenuItem{item("newFolder", "newFolder")}).PopupAt(win, x, y)
+		return chosen
+	}
 	favorite := "favorite"
 	if state.Starred {
 		favorite = "resourceMenu.unfavorite"
@@ -58,11 +65,13 @@ func (m resourceMenu) Show(ctx context.Context, x, y int, state resourceMenuStat
 	}
 	privacy := item("privacy", privacyLabel)
 	privacy.Disabled = state.PrivacyDisabled
-	items := []*mygo.MenuItem{
-		item("preview", "resourceMenu.preview"),
-		item("favorite", favorite),
+	rename := item("rename", "renameEntry")
+	rename.Disabled = state.RenameDisabled
+	items := []*mygo.MenuItem{item("openFolder", "resourceMenu.openFolder"), rename}
+	if !state.Directory {
+		items = []*mygo.MenuItem{item("preview", "resourceMenu.preview"), item("favorite", favorite), rename}
 	}
-	if state.Image {
+	if state.Image && !state.Directory {
 		copyImage := item("copyImage", "copyImage")
 		copyImage.Disabled = state.CopyImageBusy
 		items = append(items, copyImage)
@@ -76,8 +85,10 @@ func (m resourceMenu) Show(ctx context.Context, x, y int, state resourceMenuStat
 		item("absolutePath", "copyAbsolutePath"),
 		mygo.Separator(),
 		privacy,
-		trash,
 	)
+	if !state.Directory {
+		items = append(items, trash)
+	}
 	tags := &mygo.MenuItem{Label: m.message("tags")}
 	for index, swatch := range nativeTagPalette {
 		command := "tag:" + swatch.name

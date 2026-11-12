@@ -3,6 +3,7 @@ import {mountPDFPreview} from './pdf-preview.js';
 import {mountOfficePreview,OfficePreviewError} from './office-preview.js';
 import {codeLanguage,mountCodePreview} from './code-preview.js';
 import {previewLoading} from './loading-state.js';
+import {mountImageViewer} from './image-viewer.js';
 
 const pdfAssets=new URL('./vendor/pdfjs/',import.meta.url).href;
 const textExtensions=new Set(['.txt','.md','.markdown','.csv']);
@@ -32,7 +33,7 @@ async function renderMarkdown(source) {
  return article;
 }
 
-export function mountDocumentPreview(root,item,{onEscape}) {
+export function mountDocumentPreview(root,item,{onEscape,autoFormat=false}) {
  const abort=new AbortController();
  const {signal}=abort;
  let pdfTask;
@@ -63,7 +64,7 @@ export function mountDocumentPreview(root,item,{onEscape}) {
     const truncated=response.headers.get('X-Weave-Preview-Truncated')==='1';
     if(language){
      const canFormat=response.headers.get('X-Weave-Can-Format')==='1';
-     await mountCodePreview(root,item,source,{language,truncated,canFormat,signal});
+     await mountCodePreview(root,item,source,{language,truncated,canFormat,autoFormat,signal});
      return;
     }
     const markdown=item.ext==='.md'||item.ext==='.markdown';
@@ -107,4 +108,11 @@ export function mountDocumentPreview(root,item,{onEscape}) {
  }
  start();
  return ()=>{abort.abort();releasePDF()};
+}
+
+export function mountSVGPreview(root,item,{source,onModeChange,...imageOptions}){
+ return mountImageViewer(root,item,{
+  ...imageOptions,
+  svg:{source,onModeChange,mountSource:panel=>mountDocumentPreview(panel,item,{autoFormat:true})}
+ });
 }

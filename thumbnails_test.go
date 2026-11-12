@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
@@ -179,4 +180,34 @@ func absInt(n int) int {
 		return -n
 	}
 	return n
+}
+
+func TestEmbeddedRAWPreview(t *testing.T) {
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 96, 48)), nil); err != nil {
+		t.Fatal(err)
+	}
+	const previewOffset = 64
+	data := make([]byte, previewOffset)
+	copy(data, "II\x2a\x00")
+	order := binary.LittleEndian
+	order.PutUint32(data[4:], 8)
+	order.PutUint16(data[8:], 2)
+	for i, value := range []uint32{previewOffset, uint32(encoded.Len())} {
+		entry := data[10+12*i:]
+		order.PutUint16(entry, uint16(513+i))
+		order.PutUint16(entry[2:], 4)
+		order.PutUint32(entry[4:], 1)
+		order.PutUint32(entry[8:], value)
+	}
+	data = append(data, encoded.Bytes()...)
+	preview := embeddedRAWPreview(bytes.NewReader(data), data[:previewOffset], 48)
+	if preview == nil || preview.Bounds() != image.Rect(0, 0, 48, 24) {
+		t.Fatalf("unexpected embedded preview: %v", preview)
+	}
+
+	order.PutUint32(data[18:], uint32(len(data)))
+	if preview := embeddedRAWPreview(bytes.NewReader(data), data[:previewOffset], 48); preview != nil {
+		t.Fatal("accepted a JPEG offset outside the source")
+	}
 }

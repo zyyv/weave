@@ -432,6 +432,7 @@ func main() {
 				jsonOut(len(paths) > 0)
 			case "mark":
 				var in struct {
+					Root string  `json:"root"`
 					ID   string  `json:"id"`
 					Star *bool   `json:"star"`
 					Tags *string `json:"tags"`
@@ -440,11 +441,52 @@ func main() {
 					fail(e)
 					return
 				}
-				if e := lib.UpdateMark(in.ID, in.Star, in.Tags, token); e != nil {
+				if e := lib.UpdateEntryMark(in.Root, in.ID, in.Star, in.Tags, token); e != nil {
 					fail(e)
 					return
 				}
 				jsonOut(true)
+			case "create-folder":
+				var in struct{ Root, Parent, Name string }
+				if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in); err != nil {
+					fail(err)
+					return
+				}
+				if err := lib.CreateFolder(in.Root, in.Parent, in.Name, token); err != nil {
+					fail(err)
+					return
+				}
+				jsonOut(true)
+			case "move-entries":
+				var in struct {
+					Root, Destination string
+					Entries           []library.EntryRef
+				}
+				if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 65536)).Decode(&in); err != nil {
+					fail(err)
+					return
+				}
+				count, err := lib.MoveEntries(in.Root, in.Destination, in.Entries, token)
+				message := ""
+				if err != nil {
+					message = localizedError(prefs.Get(lib.Status().Root).Preferences.Locale, err.Error())
+				}
+				jsonOut(map[string]any{"count": count, "error": message})
+			case "rename":
+				var in struct {
+					Root, ID, Stem string
+					Size, Modified int64
+				}
+				if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 65536)).Decode(&in); err != nil {
+					fail(err)
+					return
+				}
+				item, err := lib.Rename(in.Root, in.ID, in.Stem, in.Size, in.Modified, token)
+				if err != nil {
+					fail(err)
+					return
+				}
+				jsonOut(item)
 			case "trash":
 				if *serve {
 					fail(fmt.Errorf("%s", message("errors.desktopTrash")))
@@ -480,7 +522,8 @@ func main() {
 				jsonOut(true)
 			case "reveal", "export":
 				var in struct {
-					IDs []string `json:"ids"`
+					Root string   `json:"root"`
+					IDs  []string `json:"ids"`
 				}
 				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 65536)).Decode(&in); e != nil {
 					fail(e)
@@ -491,7 +534,7 @@ func main() {
 					return
 				}
 				if action == "reveal" {
-					x, e := lib.Item(in.IDs[0], token)
+					x, e := lib.Entry(in.Root, in.IDs[0], token)
 					if e != nil {
 						fail(e)
 						return
@@ -516,7 +559,7 @@ func main() {
 					jsonOut(map[string]int{"count": 0})
 					return
 				}
-				n, e := lib.Export(in.IDs, paths[0], token)
+				n, e := lib.ExportEntries(in.Root, in.IDs, paths[0], token)
 				if e != nil {
 					fail(fmt.Errorf(message("errors.partialExport"), n, e))
 					return
@@ -550,6 +593,14 @@ func main() {
 			thumbnails.serve(w, r, lib, strings.TrimPrefix(path, "thumb/"))
 			return
 		}
+		if strings.HasPrefix(path, "image-preview/") {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method", http.StatusMethodNotAllowed)
+				return
+			}
+			thumbnails.serveRasterPreview(w, r, lib, strings.TrimPrefix(path, "image-preview/"), message)
+			return
+		}
 		if strings.HasPrefix(path, "media/") {
 			if r.Method != "GET" && r.Method != "HEAD" {
 				http.Error(w, "method", 405)
@@ -562,6 +613,13 @@ func main() {
 			}
 			defer f.Close()
 			switch x.Ext {
+			case ".svg":
+				serveSVG(w, r, f, x)
+				return
+			case ".avif":
+				w.Header().Set("Content-Type", "image/avif")
+			case ".arw":
+				w.Header().Set("Content-Type", "image/x-sony-arw")
 			case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".mp4", ".mov", ".m4v", ".webm", ".mp3", ".wav", ".m4a", ".ogg":
 				w.Header().Set("Content-Type", mime.TypeByExtension(x.Ext))
 			case ".pic", ".record_thumb":

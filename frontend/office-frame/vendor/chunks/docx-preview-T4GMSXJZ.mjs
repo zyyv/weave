@@ -92,13 +92,13 @@ section.${t}>footer { z-index: 1; }
 `;return this.options.renderComments&&(c+=`
 .${t}-comment-ref { cursor: pointer; }
 .${t}-comment-ref[data-docx-comment-positioned="true"]:not(:focus) { opacity: 0; }
-.${t}-comment-ref:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.
 .${t}-comment-anchor { display: inline-block; width: 0; height: 0; overflow: visible; vertical-align: baseline; }
 .${t}-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1000; }
 .${t}-comment-popover { display: block; width: max-content; pointer-events: auto; margin: 0; padding: 0; }
 .${t}-comment-popover > summary { list-style: none; cursor: pointer; display: block; padding: 0; margin: 0; }
 .${t}-comment-popover > summary::-webkit-details-marker { display: none; }
-.${t}-comment-popover > summary:focus-visible { outline: 2px solid currentColor; }
+.
 .${t}-comment-body { position: absolute; top: 100%; width: 30ch; box-sizing: border-box; overflow: auto; padding: .5rem; background: ${n}; color: var(--docx-auto-color); box-shadow: 0 0 .25rem rgba(0,0,0,.25); }
 .${t}-comment-author,.${t}-comment-date { font-size: .875rem; color: ${e?Tt("#888888"):"#888"}; }
 @media print { .${t}-comment-layer, .${t}-comment-popover, .${t}-comment-body { position: static !important; width: auto !important; max-width: none !important; max-height: none !important; overflow: visible; } .${t}-comment-layer { pointer-events: auto; } .${t}-comment-body { box-shadow: none; } }
