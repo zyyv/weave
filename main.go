@@ -24,6 +24,7 @@ import (
 	"time"
 	"weave/internal/library"
 	"weave/internal/preferences"
+	"weave/internal/scanignore"
 )
 
 //go:embed frontend/*
@@ -83,6 +84,7 @@ func main() {
 	if e != nil {
 		log.Fatal(e)
 	}
+	lib.SetScanRules(prefs.ScanMatcher)
 	message := func(key string) string { return localizedMessage(prefs.Get(lib.Status().Root).Preferences.Locale, key) }
 	if *root != "" {
 		var remember func(string) error
@@ -153,7 +155,7 @@ func main() {
 				return
 			}
 			action := strings.TrimPrefix(path, "api/")
-			if r.Method == "GET" && action != "status" && action != "activity" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" && action != "resource" {
+			if r.Method == "GET" && action != "status" && action != "activity" && action != "list" && action != "scopes" && action != "browse" && action != "settings" && action != "histogram" && action != "directories" && action != "scan-ignore" && action != "resource" {
 				http.Error(w, "POST required", 405)
 				return
 			}
@@ -307,6 +309,28 @@ func main() {
 					preferences.Snapshot
 					Development bool `json:"development"`
 				}{prefs.Get(lib.Status().Root), *development})
+			case "scan-ignore":
+				if r.Method == "POST" {
+					var in struct {
+						Root string
+						scanignore.Project
+					}
+					if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4*1024*1024)).Decode(&in); err != nil {
+						fail(err)
+						return
+					}
+					var err error
+					if in.Root == "" {
+						err = prefs.SetGlobalIgnore(in.Rules)
+					} else {
+						err = prefs.SetProjectIgnore(in.Root, in.Project)
+					}
+					if err != nil {
+						fail(err)
+						return
+					}
+				}
+				jsonOut(prefs.ScanIgnore())
 			case "bindings":
 				var in map[string]preferences.Contact
 				if e := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2*1024*1024)).Decode(&in); e != nil {

@@ -16,6 +16,7 @@ Weave is a local file browser for macOS. It recognizes ordinary folders and WeCh
 | Directory overview | See storage use, file and folder counts, file type breakdown, and a year of file activity. |
 | Browse your library | Browse ordinary folders by their real hierarchy, including empty folders, with breadcrumb navigation. Browse WeChat resources by conversation. Both sources support a flat file view, grid and list layouts, and sorting by modification time, size, or name. Conversations group files by date. |
 | Detect folder type | Detection is automatic by default. See the detected type and active mode in **Settings → Data & storage**. Override with Ordinary folder or WeChat conversations, or restore Automatic. Mode and grouping choices are saved separately for each resource root. |
+| Scan ignore | In **Settings → Scan ignore**, edit and reorder scan ignore patterns. Projects can inherit the global rules, add higher-priority rules, or use only their own. Edits save when you leave the field and apply on the next scan. |
 | Search and organize | Search filenames, tags, and bound conversation names or account identifiers. Combine file-type, conversation, and favorites filters; select multiple file types within a conversation. Add favorites and tags for later. |
 | Preview and play | View images, paired originals and thumbnails, file details, formatted Markdown, TXT and CSV, continuous PDF previews, and built-in Word, Excel, and PowerPoint viewers. Open previews fullscreen and press Esc to return. View syntax-highlighted source code and format supported files with Oxfmt. Play video and audio with seeking, volume, and speed controls; navigate audio with a waveform. Decode SILK and AMR-NB voice messages locally. |
 | Name conversations | Manually associate folder identifiers with confirmed contact names, group chats, or custom names. Import mappings in JSON; bindings are kept separately for each resource root. |
@@ -52,7 +53,7 @@ Library metadata is stored separately in `~/Library/Application Support/Weave/`:
 | --- | --- |
 | `marks.json` | Favorites and tags |
 | `source.txt` | Selected resource directory |
-| `settings.json` | Preferences, source modes and browsing choices, and conversation bindings |
+| `settings.json` | Preferences, source modes and browsing choices, scan ignore rules, and conversation bindings |
 
 - **Conversation names are manual.** Weave does not decrypt contact or session databases, infer names from folder hashes, or verify account ownership.
 - **Preview support depends on the format.** Encrypted DAT / PIC images and unsupported media codecs cannot be previewed. SILK / AMR-NB decoding is limited to 16 MiB per file and 15 minutes of decoded audio; AMR-WB is unsupported. Original files can still be exported.

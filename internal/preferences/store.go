@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 )
 
@@ -38,6 +39,7 @@ type Source struct {
 	Timeline bool   `json:"timeline,omitempty"`
 }
 type disk struct {
+	ScanIgnore              ScanIgnore                    `json:"scanIgnore"`
 	DirectorySelectionSaved bool                          `json:"directorySelectionSaved,omitempty"`
 	LastDirectory           string                        `json:"lastDirectory,omitempty"`
 	Directories             []Directory                   `json:"directories,omitempty"`
@@ -64,6 +66,9 @@ func New(dir string) (*Store, error) {
 	}
 	if e != nil && !os.IsNotExist(e) {
 		return nil, e
+	}
+	if s.data.ScanIgnore.Global == nil {
+		s.data.ScanIgnore.Global = slices.Clone(defaultScanIgnoreRules)
 	}
 	if s.data.Bindings == nil {
 		s.data.Bindings = map[string]map[string]Contact{}

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"weave/internal/scanignore"
 )
 
 type Item struct {
@@ -63,17 +64,19 @@ type Status struct {
 	FolderCount      int              `json:"folderCount"`
 }
 type Library struct {
-	mu        sync.RWMutex
-	items     []Item
-	ids       map[string]int
-	marks     map[string]Mark
-	state     Status
-	stateFile string
-	index     *catalogIndex
-	cache     queryCache
-	folders   map[string]Item
-	vault     vaultState
-	dataDir   string
+	mu                  sync.RWMutex
+	items               []Item
+	ids                 map[string]int
+	marks               map[string]Mark
+	state               Status
+	stateFile           string
+	index               *catalogIndex
+	cache               queryCache
+	folders             map[string]Item
+	vault               vaultState
+	dataDir             string
+	scanRules           func(string) (scanignore.Matcher, error)
+	ignoredPrivateFiles []string
 }
 
 func New(root, data string) (*Library, error) {
@@ -161,11 +164,19 @@ func (l *Library) CloseDirectory(root string, persist func() error) error {
 	}
 	if l.state.Root == root {
 		l.items, l.folders, l.ids = nil, nil, nil
+		l.ignoredPrivateFiles = nil
 		l.vault.token = ""
 		l.state = Status{}
 		l.reindex()
 	}
 	return nil
+}
+
+// SetScanRules supplies the rules for each canonical root at the start of a scan.
+func (l *Library) SetScanRules(load func(string) (scanignore.Matcher, error)) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.scanRules = load
 }
 
 func (l *Library) Rescan() error {
@@ -202,11 +213,28 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 		l.mu.Unlock()
 		return fmt.Errorf("目录已变化，请重试")
 	}
+	var matcher scanignore.Matcher
+	if l.scanRules != nil {
+		matcher, err = l.scanRules(root)
+		if err != nil {
+			l.mu.Unlock()
+			return err
+		}
+	}
 	switching := l.state.Root != root
 	if switching {
 		l.vault.token = ""
 	}
 	showProgress := len(l.vault.records) == 0
+	// A private original skipped by an ignore rule must still protect its thumbnail.
+	privatePaths := make(map[string]bool)
+	if len(matcher) != 0 {
+		for owner, record := range l.vault.records {
+			for rel := range record.Paths {
+				privatePaths[filepath.Join(owner, rel)] = true
+			}
+		}
+	}
 	l.state.Scanning = true
 	l.state.Scanned = 0
 	l.state.Error = ""
@@ -215,6 +243,7 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 		items := make([]Item, 0, 10000)
 		byPath := map[string]int{}
 		folders := map[string]Item{}
+		var ignoredPrivateFiles []string
 		skipped := 0
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, e error) error {
 			if e != nil {
@@ -224,28 +253,40 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 				skipped++
 				return nil
 			}
-			if path != root && strings.HasPrefix(d.Name(), ".") {
+			if path == root {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if d.Type()&os.ModeSymlink != 0 {
+				return nil
+			}
+			excluded := strings.HasPrefix(d.Name(), ".") || (!d.IsDir() && l.isMetadata(path))
+			if !excluded && len(matcher) != 0 {
+				excluded = matcher.Ignored(strings.Split(rel, "/"), d.IsDir())
+			}
+			if excluded {
 				if d.IsDir() {
 					return fs.SkipDir
+				}
+				if privatePaths[path] {
+					ignoredPrivateFiles = append(ignoredPrivateFiles, path)
 				}
 				return nil
 			}
 			if d.IsDir() {
-				if path != root {
-					rel, _ := filepath.Rel(root, path)
-					parent := filepath.ToSlash(filepath.Dir(rel))
-					if parent == "." {
-						parent = ""
-					}
-					modified := int64(0)
-					if info, e := d.Info(); e == nil {
-						modified = info.ModTime().UnixMilli()
-					}
-					folders[filepath.ToSlash(rel)] = Item{ID: "folder:" + filepath.ToSlash(rel), Name: d.Name(), Folder: parent, Kind: "folder", Directory: true, Modified: modified}
+				parent := filepath.Dir(rel)
+				if parent == "." {
+					parent = ""
 				}
-				return nil
-			}
-			if d.Type()&os.ModeSymlink != 0 || l.isMetadata(path) {
+				modified := int64(0)
+				if info, e := d.Info(); e == nil {
+					modified = info.ModTime().UnixMilli()
+				}
+				folders[rel] = Item{ID: "folder:" + rel, Name: d.Name(), Folder: filepath.ToSlash(parent), Kind: "folder", Directory: true, Modified: modified}
 				return nil
 			}
 			info, e := d.Info()
@@ -256,11 +297,7 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 			if !info.Mode().IsRegular() {
 				return nil
 			}
-			rel, e := filepath.Rel(root, path)
-			if e != nil {
-				return e
-			}
-			group := strings.Split(rel, string(filepath.Separator))[0]
+			group, _, _ := strings.Cut(rel, "/")
 			if group == rel {
 				group = "未分组"
 			}
@@ -294,6 +331,7 @@ func (l *Library) scanDirectory(root string, onOpen func(string) error, rescan b
 			return
 		}
 		l.items, l.folders, l.ids = items, folders, ids
+		l.ignoredPrivateFiles = ignoredPrivateFiles
 		l.state = Status{Root: root, Skipped: skipped, Updated: max(l.state.Updated+1, time.Now().UnixMilli())}
 		l.reindex()
 		l.state.DetectedMode, l.state.DetectionReason = detectSource(root, folders, items)
@@ -416,11 +454,15 @@ func pathID(path string) string {
 	return hex.EncodeToString(hash[:12])
 }
 
+func companionThumbnail(path, ext string) string {
+	return strings.TrimSuffix(path, ext) + "_thumb.jpg"
+}
+
 func linkPreviews(items []Item, byPath map[string]int) {
 	for i := range items {
 		item := &items[i]
 		item.Preview = ""
-		path := strings.TrimSuffix(item.Path, item.Ext) + "_thumb.jpg"
+		path := companionThumbnail(item.Path, item.Ext)
 		if j, ok := byPath[path]; ok {
 			item.Preview = items[j].ID
 		} else if item.Kind == "image" {

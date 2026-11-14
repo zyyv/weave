@@ -102,7 +102,7 @@ function layoutToasts(){
  toastRoot.style.setProperty('--front-height',frontHeight+'px');
 }
 
-function toast(message,type='info'){
+function toast(message,type='info',action){
  let persistent=type==='loading';
  const card=document.createElement('div');
  card.className='toast-card';
@@ -121,7 +121,7 @@ function toast(message,type='info'){
  close.setAttribute('aria-label',t('dismissToast'));
  close.innerHTML=icon('close');
 
- let timer,startedAt,remaining=4000;
+ let timer,startedAt,remaining=action?6500:4000;
  function dismiss(){
   if(card.classList.contains('is-leaving'))return;
   clearTimeout(timer);
@@ -156,6 +156,19 @@ function toast(message,type='info'){
  toastDismissals.set(card,dismiss);
  if(mark.hasChildNodes())card.append(mark);
  card.append(text);
+ let actionButton;
+ if(action){
+  actionButton=document.createElement('button');
+  actionButton.type='button';
+  actionButton.className='toast-action';
+  actionButton.textContent=action.label;
+  if(action.title){
+   actionButton.title=action.title;
+   actionButton.setAttribute('aria-label',action.title);
+  }
+  actionButton.onclick=()=>{if(action.run()!==false)dismiss()};
+  card.append(actionButton);
+ }
  if(type!=='loading')card.append(close);
  toastRoot.append(card);
  placeToasts();
@@ -175,6 +188,8 @@ function toast(message,type='info'){
  }
  updateTimer();
  return {
+  dismiss,
+  setActionDisabled(disabled){if(actionButton)actionButton.disabled=disabled},
   update:message=>{if(text.textContent!==message)text.textContent=message},
   settle(message){
    card.dataset.type='info';
@@ -719,6 +734,7 @@ function closeMobileSidebar(){
  directoryUI.hideInfo();
 }
 function setPage(next){
+ if(page==='settings'&&next!=='settings')settingsUI?.finishEdit();
  page=next;
  $('#libraryPage').hidden=page!=='library';
  $('#settingsPage').hidden=page!=='settings';

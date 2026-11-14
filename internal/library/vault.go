@@ -233,6 +233,14 @@ func (l *Library) reindex() {
 			v.items[item.Preview] = owner
 		}
 	}
+	for _, path := range l.ignoredPrivateFiles {
+		if owner := v.owners[path]; owner != "" {
+			id := pathID(companionThumbnail(path, strings.ToLower(filepath.Ext(path))))
+			if _, indexed := l.ids[id]; indexed && v.items[id] == "" {
+				v.items[id] = owner
+			}
+		}
+	}
 	markAncestors := func(folder string) {
 		for folder != "" && !v.ancestors[folder] {
 			v.ancestors[folder] = true

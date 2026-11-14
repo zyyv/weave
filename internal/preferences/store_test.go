@@ -1,6 +1,44 @@
 package preferences
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"testing"
+)
+
+func TestGlobalScanIgnoreDefaultsAndExplicitEmptyList(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"preferences":{"theme":"light"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pattern := range []string{".DS_Store", "dist/", "node_modules/", "output/"} {
+		if !slices.Contains(store.ScanIgnore().Global, pattern) {
+			t.Errorf("missing default pattern %q", pattern)
+		}
+	}
+	matcher, err := store.ScanMatcher(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !matcher.Ignored([]string{"app", "dist"}, true) || matcher.Ignored([]string{"app", "dist"}, false) {
+		t.Fatal("dist rule should match nested directories only")
+	}
+	if err := store.SetGlobalIgnore([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.ScanIgnore().Global; len(got) != 0 {
+		t.Fatalf("deleted defaults returned on restart: %v", got)
+	}
+}
 
 func TestPreferencesAndRootIsolation(t *testing.T) {
 	dir := t.TempDir()

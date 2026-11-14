@@ -1,4 +1,5 @@
 import {getLocale,t} from './i18n.js';
+import {createScanIgnoreSettings} from './scan-ignore-settings.js';
 export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContacts,getSource,isWechat,sourceBusy,changeSource,groupingMode,groupingOptions,changeGrouping,setPref,onContacts,choose,rescan,directoryName,directoryEntries,editDirectory,removeDirectory,directoryActivity,getPendingDirectory,onNavigate,startTour,getDevelopment=()=>false,replayTour}){
  let section='general',bindingHash='',historyAction=null,historySaving=false;
  const intro=(h,p)=>`<div class="settings-intro"><h2>${h}</h2><p>${p}</p></div>`;
@@ -7,6 +8,7 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
  const groupingControl=st=>`<div class="setting-row"><div><strong>${t('resourceGrouping')}</strong><small>${t('sourceBrowseDescription')}</small></div><select id="settingsGrouping" aria-label="${t('resourceGrouping')}" ${!st.root||st.scanning||sourceBusy()?'disabled':''}>${groupingOptions().map(([v,n])=>`<option value="${v}" ${groupingMode()===v?'selected':''}>${n}</option>`).join('')}</select></div>`;
  const bindOptions=()=>getState().groups?.filter(g=>g!=='未分组').map(g=>`<option value="${esc(g)}">${esc(getContacts()[g]?.name||t('unboundConversation'))} · ${esc(g.slice(0,12))}</option>`).join('')||'';
  const directoryBusy=()=>getState().scanning||sourceBusy();
+ const scanIgnore=createScanIgnoreSettings({esc,icon,api,toast,getState,directoryEntries,directoryName,directoryBusy,rescan,choose});
  function resourceFolder(st){
   const disabled=directoryBusy()?'disabled':'';
   const name=st.root?directoryName(st.root):t('noResourceFolderSelected');
@@ -128,6 +130,7 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
   history.after(next.content);
  }
  function refreshDirectories(){
+  if(section==='scan-ignore'&&$('#scanIgnoreSettings'))scanIgnore.mount($('#scanIgnoreSettings'));
   const current=$('.current-directory-name');
   const root=getState().root;
   if(current&&root&&current.closest('.resource-folder').dataset.root===root){
@@ -137,6 +140,7 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
   if(!historyAction&&!historySaving)renderDirectoryHistory();
  }
  function updateDirectoryStatus(){
+  scanIgnore.updateScanAction();
   const status=$('#settingsDirectoryStatus');
   if(!status)return;
   const activity=directoryActivity();
@@ -154,6 +158,17 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
  const modeLabel=mode=>t(mode==='wechat'?'wechatResources':'ordinaryFolder');
  const sourceSettings=st.root?`<div class="setting-row"><div><strong>${t('directoryMode')}</strong><small>${t('directoryModeDescription')}</small></div><select id="sourceMode" aria-label="${t('directoryMode')}" ${st.scanning||sourceBusy()?'disabled':''}>${[['auto',t('autoDetectDefault')],['folder',t('ordinaryFolder')],['wechat',t('wechatResources')]].map(([v,n])=>`<option value="${v}" ${source.mode===v?'selected':''}>${n}</option>`).join('')}</select></div><div class="setting-row"><div><strong>${t('detectedDirectoryType')}</strong><small>${t(st.scanning?'detectionPending':st.detectionReason||'ordinaryDirectory')}</small></div><span class="mode-value">${st.scanning?t('scanningLabel'):modeLabel(st.detectedMode)}</span></div><div class="setting-row"><div><strong>${t('activeDirectoryMode')}</strong><small>${t(source.mode==='auto'?'automaticModeDescription':'manualModeDescription')}</small></div><span class="mode-value">${modeLabel(wechat?'wechat':'folder')}</span></div>`:'';
  $('#settingsNav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.section===section));const root=$('#settingsContent');
+ if(section!=='scan-ignore')scanIgnore.finishEdit();
+ $('#settingsState').hidden=section==='scan-ignore';
+ if(section==='scan-ignore'){
+  if(!$('#scanIgnoreSettings'))root.innerHTML=intro(t('scanIgnore'),t('ignoreIntro'))+'<div id="scanIgnoreSettings"></div>';
+  else{
+   root.querySelector('.settings-intro h2').textContent=t('scanIgnore');
+   root.querySelector('.settings-intro p').textContent=t('ignoreIntro');
+  }
+  scanIgnore.mount($('#scanIgnoreSettings'));
+  return;
+ }
  if(section==='general')root.innerHTML=intro(t('general'),t('makeTheLibraryWorkTheWayYouDo'))+`<div class="settings-panel">${select('locale',t('language'),t('languageDescription'),[['zh-CN','简体中文'],['en','English']])}${groupingControl(st)}${wechat?toggle('thumbs',t('showThumbnailFiles'),t('showThumbnailsAlongsideOriginalFiles')):''}${select('sort',t('defaultSortOrder'),t('defaultSortDescription'),[['date',t('recentlyModified')],['size',t('largestFirst')],['name',t('name')]])}${select('view',t('resourceView'),t('fileViewDescription'),[['grid',t('grid')],['list',t('list')]])}</div><div class="settings-note settings-shortcuts">
   <span>${t('keyboardShortcuts')}</span>
   <ul>
@@ -217,5 +232,5 @@ export function createSettings({$,esc,icon,api,toast,getPrefs,getState,getContac
  }
  async function bind(m){try{const snapshot=await api('bindings',m);onContacts(snapshot.contacts);toast(t('conversationBindingsSaved'),'success');render()}catch(e){toast(e.message,'error')}}
  $('#settingsNav').querySelectorAll('button').forEach(b=>b.onclick=()=>onNavigate(()=>{section=b.dataset.section;render()}));
- return{render,updateDirectoryStatus,refreshDirectories,location:()=>({tab:section,hash:bindingHash}),open:(tab='general',hash='')=>{section=tab;bindingHash=hash;render()}};
+ return{render,updateDirectoryStatus,refreshDirectories,finishEdit:scanIgnore.finishEdit,location:()=>({tab:section,hash:bindingHash}),open:(tab='general',hash='')=>{section=tab;bindingHash=hash;render()}};
 }

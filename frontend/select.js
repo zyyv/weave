@@ -5,12 +5,22 @@ const controls=new Map();
 const optionGap=4;
 let active=null,panel,viewport,spacer,query,filtered=[],rows=[],highlight=0,installed=false,totalHeight=0;
 const measure=document.createElement('canvas').getContext('2d');
+function setBadge(container,text,before=null){
+ const existing=container.querySelector(':scope > .select-badge');
+ if(!text){existing?.remove();return}
+ const badge=existing||document.createElement('small');
+ badge.className='select-badge';
+ if(badge.textContent!==text)badge.textContent=text;
+ if(!existing)container.insertBefore(badge,before);
+}
 export function syncSelects(){
  for(const [select,button] of controls){
   if(!select.isConnected){button.remove();controls.delete(select);continue}
   button.hidden=select.hidden;button.disabled=select.disabled;
-  const label=select.selectedOptions[0]?.textContent||t('pleaseSelect');
+  const option=select.selectedOptions[0];
+  const label=option?.textContent||t('pleaseSelect');
   if(button.querySelector('span').textContent!==label)button.querySelector('span').textContent=label;button.title=label;
+  setBadge(button,option?.dataset.badge,button.querySelector('svg'));
   button.setAttribute('aria-label',select.getAttribute('aria-label')||document.querySelector(`label[for="${select.id}"]`)?.textContent||t('selectLabel'));
  }
  if(active&&(!active.isConnected||active.hidden||active.disabled))close();
@@ -35,6 +45,7 @@ function draw(){
    description.title=description.textContent;
    label.append(description);
   }
+  setBadge(node,option.dataset.badge);
   if(option.value===active.value){const check=document.createElement('span');check.className='select-check';check.innerHTML=iconSvg('check');check.setAttribute('aria-hidden','true');node.append(check)}
   node.onpointerdown=e=>e.preventDefault();node.onclick=()=>choose(i);spacer.append(node);if(i===highlight)renderedHighlight=true;
  }
@@ -43,12 +54,14 @@ function draw(){
 function layout(){
  if(!active)return;
  const r=controls.get(active).getBoundingClientRect();measure.font='13px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
- const longest=Math.max(0,...filtered.map(o=>measure.measureText(o.textContent).width));
+ const badgeWidth=option=>option.dataset.badge?measure.measureText(option.dataset.badge).width+24:0;
+ const longest=Math.max(0,...filtered.map(o=>measure.measureText(o.textContent).width+badgeWidth(o)));
  const width=Math.min(Math.ceil(Math.max(query.hidden?0:220,active.dataset.optionDetails?350:0,r.width,longest+66)),620,innerWidth-16);
  panel.style.width=width+'px';panel.style.left=Math.max(8,Math.min(r.left,innerWidth-width-8))+'px';
- let top=0;const available=width-64;
+ let top=0;
  rows=filtered.map(option=>{
   const label=option.textContent;
+  const available=width-64-badgeWidth(option);
   let lines=1;
   if(measure.measureText(label).width>available){
    let line='';
@@ -75,6 +88,7 @@ function open(select){
  if(active===select){close();return}close();active=select;const button=controls.get(select);button.setAttribute('aria-expanded','true');query.value='';
  query.hidden=select.dataset.search==='never'||(select.dataset.search!=='always'&&select.options.length<=12);
  viewport.setAttribute('aria-label',button.getAttribute('aria-label'));
+ panel.toggleAttribute('data-badged-options',select.hasAttribute('data-badged-options'));
  (select.closest('dialog')||document.body).append(panel);panel.showPopover();filter();focusTarget().focus({preventScroll:true});
 }
 function onKey(e){
