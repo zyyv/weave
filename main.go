@@ -368,7 +368,7 @@ func main() {
 					http.Error(w, message("errors.vaultLocked"), http.StatusForbidden)
 					return
 				}
-				query := library.Query{Private: private, VaultToken: token, Search: q.Get("search"), TagColors: q.Get("tagColors"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
+				query := library.Query{WeChat: mode == "wechat", Private: private, VaultToken: token, Search: q.Get("search"), TagColors: q.Get("tagColors"), Kind: q.Get("kind"), Group: q.Get("group"), Sort: q.Get("sort"), Star: q.Get("star") == "1", Thumbs: q.Get("thumbs") == "1", Offset: offset, Limit: limit, Names: names}
 				if action == "scopes" {
 					jsonOut(lib.Scopes(query))
 				} else if action == "browse" {

@@ -105,3 +105,32 @@ func TestFolderBrowsing(t *testing.T) {
 		t.Fatalf("flat listing should also fall back after a folder is removed: %+v", r)
 	}
 }
+
+func TestWeChatImageVariants(t *testing.T) {
+	items := []Item{
+		{ID: "standard", Folder: "session/Image", Group: "session", Kind: "image", Ext: ".jpg", Name: "9224191794471298_.pic.jpg"},
+		{ID: "hd", Folder: "session/Image", Group: "session", Kind: "image", Ext: ".jpg", Name: "9224191794471298_.pic_hd.jpg"},
+		{ID: "thumb", Folder: "session/Image", Group: "session", Kind: "image", Ext: ".jpg", Name: "9224191794471298_.pic_thumb.jpg", Thumbnail: true},
+		{ID: "short-thumb", Folder: "session/Image", Group: "session", Kind: "image", Ext: ".jpg", Name: "9224191794471298_thumb.jpg", Thumbnail: true},
+		{ID: "fallback", Folder: "other/Image", Group: "other", Kind: "image", Ext: ".jpg", Name: "9224191794471298_.pic.jpg"},
+		{ID: "thumb-only", Folder: "other/Image", Group: "other", Kind: "image", Ext: ".jpg", Name: "99_.pic_thumb.jpg", Thumbnail: true},
+	}
+	l := &Library{items: items, index: buildIndex(items)}
+	wechat := Query{WeChat: true, Thumbs: true}
+	if got := l.List(wechat); got.Total != 2 || got.Items[0].ID != "hd" || got.Items[1].ID != "fallback" {
+		t.Fatalf("WeChat list = %+v, want HD and the standard-only image", got)
+	}
+	if got := l.Scopes(wechat); got.Resources != 2 || got.Total != 2 {
+		t.Fatalf("WeChat scopes = %+v, want two images across two sessions", got)
+	}
+	wechat.Search = "9224191794471298_.pic.jpg"
+	if got := l.List(wechat); got.Total != 1 || got.Items[0].ID != "fallback" {
+		t.Fatalf("WeChat search = %+v, want the standard-only image", got)
+	}
+	if got := l.List(Query{Thumbs: true}); got.Total != len(items) {
+		t.Fatalf("regular folder list = %+v, want every file", got)
+	}
+	if hidden := wechatHiddenImages(items, map[string]string{"hd": "vault"}); hidden["standard"] {
+		t.Fatal("a private HD file hid a public standard image")
+	}
+}

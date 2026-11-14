@@ -333,7 +333,7 @@ type Query struct {
 	TagColors                         string
 	ModifiedFrom, ModifiedBefore      *int64 // Milliseconds since epoch, inclusive start and exclusive end.
 	Names                             map[string]string
-	Thumbs, Star                      bool
+	Thumbs, Star, WeChat              bool
 	Offset, Limit                     int
 	Private                           bool
 	VaultToken                        string
@@ -605,7 +605,7 @@ func (l *Library) Scopes(q Query) Scopes {
 	kinds := kindsFor(q.Kind)
 	tagColors := kindsFor(q.TagColors)
 	if q.Search == "" && q.TagColors == "" && !q.Star {
-		for hash, byKind := range l.index.summaries[q.Thumbs] {
+		for hash, byKind := range l.index.summaries[scopeVisibility{thumbs: q.Thumbs, wechat: q.WeChat}] {
 			if q.Group != "" && hash != q.Group {
 				continue
 			}
@@ -644,7 +644,7 @@ func (l *Library) Scopes(q Query) Scopes {
 		}
 		for _, i := range candidates {
 			x := l.items[i]
-			if !l.visible(x.ID, false) || !matches(x, l.marks[x.ID], q, kinds, tagColors, search) {
+			if (q.WeChat && l.index.wechatHidden[x.ID]) || !l.visible(x.ID, false) || !matches(x, l.marks[x.ID], q, kinds, tagColors, search) {
 				continue
 			}
 			g := m[x.Group]

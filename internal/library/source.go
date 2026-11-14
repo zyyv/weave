@@ -47,6 +47,66 @@ func detectSource(root string, folders map[string]Item, items []Item) (string, s
 	return "folder", "ordinaryDirectory"
 }
 
+// wechatHiddenImages groups WeChat image variants within one folder and
+// visibility boundary. An HD file takes precedence over its standard version.
+func wechatHiddenImages(items []Item, owners map[string]string) map[string]bool {
+	type imageKey struct {
+		folder, stem, owner string
+	}
+	hd := map[imageKey]string{}
+	standard := map[imageKey][]string{}
+	thumbs := map[imageKey][]string{}
+	hidden := map[string]bool{}
+	for _, item := range items {
+		if item.Kind != "image" {
+			continue
+		}
+		name := strings.ToLower(item.Name)
+		stem := name
+		if item.Ext != ".pic" {
+			stem = strings.TrimSuffix(name, item.Ext)
+		}
+		key := imageKey{folder: item.Folder, owner: owners[item.ID]}
+		switch {
+		case strings.HasSuffix(stem, ".pic_thumb"), strings.HasSuffix(stem, ".pic_hd_thumb"):
+			hidden[item.ID] = true
+		case strings.HasSuffix(stem, ".pic_hd"):
+			key.stem = strings.TrimSuffix(stem, ".pic_hd")
+			if hd[key] == "" {
+				hd[key] = item.ID
+			} else {
+				hidden[item.ID] = true
+			}
+		case strings.HasSuffix(stem, ".pic"):
+			key.stem = strings.TrimSuffix(stem, ".pic")
+			standard[key] = append(standard[key], item.ID)
+		case strings.HasSuffix(stem, "_thumb"):
+			key.stem = strings.TrimSuffix(stem, "thumb")
+			thumbs[key] = append(thumbs[key], item.ID)
+		}
+	}
+	for key, ids := range standard {
+		if hd[key] == "" {
+			ids = ids[1:]
+		}
+		for _, id := range ids {
+			hidden[id] = true
+		}
+	}
+	for key, ids := range thumbs {
+		if hd[key] == "" && len(standard[key]) == 0 {
+			key.stem = strings.TrimSuffix(key.stem, "_")
+			if hd[key] == "" && len(standard[key]) == 0 {
+				continue
+			}
+		}
+		for _, id := range ids {
+			hidden[id] = true
+		}
+	}
+	return hidden
+}
+
 // Browse uses only the scanned catalog; a client path never opens a filesystem
 // path. Folders and files share pagination so large directories stay virtualized.
 func (l *Library) Browse(q Query, folder string) Result {

@@ -10,10 +10,15 @@ import (
 
 // Immutable metadata indexes are built once per scan, never from file contents.
 type catalogIndex struct {
-	orders    map[string][]int
-	groups    map[string]map[string][]int
-	summaries map[bool]map[string]map[string]Scope
+	orders       map[string][]int
+	groups       map[string]map[string][]int
+	summaries    map[scopeVisibility]map[string]map[string]Scope
+	wechatHidden map[string]bool
 }
+type scopeVisibility struct {
+	thumbs, wechat bool
+}
+
 type queryResult struct {
 	indices []int
 	bytes   int64
@@ -25,7 +30,11 @@ type queryCache struct {
 }
 
 func buildIndex(items []Item, protected ...map[string]string) *catalogIndex {
-	idx := &catalogIndex{orders: map[string][]int{}, groups: map[string]map[string][]int{}, summaries: map[bool]map[string]map[string]Scope{false: {}, true: {}}}
+	var owners map[string]string
+	if len(protected) > 0 {
+		owners = protected[0]
+	}
+	idx := &catalogIndex{orders: map[string][]int{}, groups: map[string]map[string][]int{}, summaries: map[scopeVisibility]map[string]map[string]Scope{}, wechatHidden: wechatHiddenImages(items, owners)}
 	date := make([]int, len(items))
 	for i := range items {
 		date[i] = i
@@ -51,6 +60,10 @@ func buildIndex(items []Item, protected ...map[string]string) *catalogIndex {
 			idx.groups[g][order] = append(idx.groups[g][order], i)
 		}
 	}
+	visibilityOptions := []scopeVisibility{{}, {thumbs: true}, {wechat: true}, {thumbs: true, wechat: true}}
+	for _, visibility := range visibilityOptions {
+		idx.summaries[visibility] = map[string]map[string]Scope{}
+	}
 	for _, x := range items {
 		if len(protected) > 0 {
 			if protected[0][x.ID] != "" {
@@ -63,14 +76,14 @@ func buildIndex(items []Item, protected ...map[string]string) *catalogIndex {
 				}
 			}
 		}
-		for _, thumbs := range []bool{false, true} {
-			if !thumbs && x.Thumbnail {
+		for _, visibility := range visibilityOptions {
+			if (!visibility.thumbs && x.Thumbnail) || (visibility.wechat && idx.wechatHidden[x.ID]) {
 				continue
 			}
-			byKind := idx.summaries[thumbs][x.Group]
+			byKind := idx.summaries[visibility][x.Group]
 			if byKind == nil {
 				byKind = map[string]Scope{}
-				idx.summaries[thumbs][x.Group] = byKind
+				idx.summaries[visibility][x.Group] = byKind
 			}
 			g := byKind[x.Kind]
 			if g.Hash == "" {
@@ -171,9 +184,9 @@ func (l *Library) query(q Query) queryResult {
 	keyBytes, _ := json.Marshal(struct {
 		Search, Kind, Group, Sort, Folder, TagColors string
 		ModifiedFrom, ModifiedBefore                 *int64
-		Thumbs, Star, Private                        bool
+		Thumbs, Star, Private, WeChat                bool
 		Names                                        map[string]string
-	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Folder, q.TagColors, q.ModifiedFrom, q.ModifiedBefore, q.Thumbs, q.Star, q.Private, names})
+	}{strings.ToLower(q.Search), q.Kind, q.Group, q.Sort, q.Folder, q.TagColors, q.ModifiedFrom, q.ModifiedBefore, q.Thumbs, q.Star, q.Private, q.WeChat, names})
 	key := string(keyBytes)
 	l.cache.mu.Lock()
 	cached, ok := l.cache.values[key]
@@ -193,7 +206,7 @@ func (l *Library) query(q Query) queryResult {
 			(q.ModifiedBefore != nil && x.Modified >= *q.ModifiedBefore) {
 			continue
 		}
-		if l.visible(x.ID, q.Private) && matches(x, l.marks[x.ID], q, kinds, tagColors, search) {
+		if (!q.WeChat || !l.index.wechatHidden[x.ID]) && l.visible(x.ID, q.Private) && matches(x, l.marks[x.ID], q, kinds, tagColors, search) {
 			r.indices = append(r.indices, i)
 			r.bytes += x.Size
 		}
