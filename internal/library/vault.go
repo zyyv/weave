@@ -243,6 +243,7 @@ func (l *Library) reindex() {
 	st.Total, st.Scanned, st.Bytes, st.FolderCount = 0, 0, 0, 0
 	st.Counts, st.AllCounts = map[string]int{}, map[string]int{}
 	st.KindBytes, st.AllKindBytes = map[string]int64{}, map[string]int64{}
+	st.Usage, st.AllUsage = make(storageBreakdown), make(storageBreakdown)
 	st.FavoriteCount, st.FavoriteBytes = 0, 0
 	st.AllFavoriteCount, st.AllFavoriteBytes = 0, 0
 	groups := map[string]bool{}
@@ -257,6 +258,8 @@ func (l *Library) reindex() {
 		st.Bytes += x.Size
 		st.AllCounts[x.Kind]++
 		st.AllKindBytes[x.Kind] += x.Size
+		category := storageCategory(x)
+		st.AllUsage.add(category, x.Size)
 		if l.marks[x.ID].Star {
 			st.AllFavoriteCount++
 			st.AllFavoriteBytes += x.Size
@@ -264,6 +267,7 @@ func (l *Library) reindex() {
 		if !x.Thumbnail {
 			st.Counts[x.Kind]++
 			st.KindBytes[x.Kind] += x.Size
+			st.Usage.add(category, x.Size)
 			if l.marks[x.ID].Star {
 				st.FavoriteCount++
 				st.FavoriteBytes += x.Size

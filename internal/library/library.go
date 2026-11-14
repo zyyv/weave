@@ -48,6 +48,8 @@ type Status struct {
 	AllCounts        map[string]int   `json:"allCounts"`
 	KindBytes        map[string]int64 `json:"kindBytes"`
 	AllKindBytes     map[string]int64 `json:"allKindBytes"`
+	Usage            storageBreakdown `json:"usage,omitempty"`
+	AllUsage         storageBreakdown `json:"allUsage,omitempty"`
 	FavoriteCount    int              `json:"favoriteCount"`
 	FavoriteBytes    int64            `json:"favoriteBytes"`
 	AllFavoriteCount int              `json:"allFavoriteCount"`

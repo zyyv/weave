@@ -1,3 +1,5 @@
+import {renderAnimatedTitle} from './animated-title.js';
+
 export function splitFileName(name){
  const dot=name.lastIndexOf('.');
  return dot>0?[name.slice(0,dot),name.slice(dot)]:[name,''];
@@ -10,9 +12,9 @@ export function mountFileName(root, reduceMotion){
  const suffix=root.querySelector('.file-name-suffix');
  let widthAnimation;
 
- function render(name){
+ function render(name,{immediate=false}={}){
   const [stem,extension]=splitFileName(name);
-  heading.textContent=stem;
+  renderAnimatedTitle(heading,stem,{immediate});
   heading.setAttribute('aria-label',name);
   suffix.textContent=extension;
   root.title=name;
@@ -21,7 +23,7 @@ export function mountFileName(root, reduceMotion){
  function setEditing(editing,{name,motion=true}={}){
   const start=root.getBoundingClientRect().width;
   widthAnimation?.cancel();
-  if(name!==undefined)render(name);
+  if(name!==undefined)render(name,{immediate:true});
   root.classList.toggle('is-editing',editing);
   form.inert=!editing;
   heading.inert=editing;
